@@ -8,6 +8,11 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
+// Validate OpenAI API key on module load
+if (!process.env.OPENAI_API_KEY) {
+  console.warn('[LLM] WARNING: OPENAI_API_KEY is not set. LLM analysis will fail.')
+}
+
 export interface DiagnosticData {
   unitId: string
   unitName: string
@@ -101,7 +106,15 @@ export async function generateDiagnosticAnalysis(
         throw new Error('No response from LLM')
       }
       
-      const analysis = JSON.parse(responseContent) as DiagnosticAnalysis
+      let analysis: DiagnosticAnalysis
+      try {
+        analysis = JSON.parse(responseContent) as DiagnosticAnalysis
+      } catch (parseError) {
+        console.error('[LLM] Failed to parse JSON response:', parseError)
+        console.error('[LLM] Response content (first 500 chars):', responseContent.substring(0, 500))
+        throw new Error(`Failed to parse LLM response as JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}`)
+      }
+      
       console.log(`[LLM] Successfully generated analysis using model: ${model}`)
       
       // Validate and ensure all required fields

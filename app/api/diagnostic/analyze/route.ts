@@ -6,6 +6,29 @@ import { storeDiagnostic } from '@/lib/storage'
 
 export async function POST(request: NextRequest) {
   try {
+    // Validate environment variables
+    const requiredEnvVars = {
+      LOOKER_API_BASE_URL: process.env.LOOKER_API_BASE_URL,
+      LOOKER_CLIENT_ID: process.env.LOOKER_CLIENT_ID,
+      LOOKER_CLIENT_SECRET: process.env.LOOKER_CLIENT_SECRET,
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    }
+    
+    const missingEnvVars = Object.entries(requiredEnvVars)
+      .filter(([_, value]) => !value)
+      .map(([key]) => key)
+    
+    if (missingEnvVars.length > 0) {
+      console.error('[API] Missing required environment variables:', missingEnvVars)
+      return NextResponse.json(
+        { 
+          error: 'Server configuration error', 
+          details: `Missing environment variables: ${missingEnvVars.join(', ')}`
+        },
+        { status: 500 }
+      )
+    }
+    
     const body = await request.json()
     const { unitId, unitName, buildingId, buildingName, context } = body
     
@@ -52,10 +75,19 @@ export async function POST(request: NextRequest) {
     const maintenanceVisits = visitReports.filter((v: any) =>
       v.type?.toLowerCase().includes('regular') || v.type?.toLowerCase().includes('maintenance')
     )
-    const lastMaintenance = maintenanceVisits.length > 0
-      ? new Date(Math.max(...maintenanceVisits.map((v: any) => new Date(v.date).getTime())))
+    const maintenanceTimestamps = maintenanceVisits
+      .map((v: any) => {
+        const dateStr = v.date || v.completedDate
+        if (!dateStr) return 0
+        const date = new Date(dateStr)
+        return isNaN(date.getTime()) ? 0 : date.getTime()
+      })
+      .filter((time: number) => time > 0)
+    
+    const lastMaintenance = maintenanceTimestamps.length > 0
+      ? new Date(Math.max(...maintenanceTimestamps))
       : null
-    const timeSinceLastMaintenance = lastMaintenance
+    const timeSinceLastMaintenance = lastMaintenance && !isNaN(lastMaintenance.getTime())
       ? Math.floor((Date.now() - lastMaintenance.getTime()) / (1000 * 60 * 60 * 24))
       : undefined
     
@@ -108,8 +140,19 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('[API] Error analyzing diagnostic:', error)
+    const errorDetails = {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined,
+    }
+    console.error('[API] Error details:', JSON.stringify(errorDetails, null, 2))
     return NextResponse.json(
-      { error: 'Failed to analyze diagnostic', details: error instanceof Error ? error.message : String(error) },
+      { 
+        error: 'Failed to analyze diagnostic', 
+        details: errorDetails.message,
+        // Only include stack in development
+        ...(process.env.NODE_ENV === 'development' ? { stack: errorDetails.stack } : {})
+      },
       { status: 500 }
     )
   }
