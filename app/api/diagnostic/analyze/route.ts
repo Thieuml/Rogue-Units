@@ -45,26 +45,49 @@ export async function POST(request: NextRequest) {
     
     // Fetch visit reports, breakdowns, maintenance issues, and repair requests
     console.log(`[API] Fetching diagnostic data for device ${unitId} (last ${daysBack} days)`)
-    const [visitReports, breakdowns, maintenanceIssues, repairRequests] = await Promise.all([
-      fetchVisitReports(unitId, daysBack).catch(err => {
-        console.error('[API] Error fetching visit reports:', err)
-        return [] // Return empty array on error
-      }),
-      fetchBreakdowns(unitId, daysBack).catch(err => {
-        console.error('[API] Error fetching breakdowns:', err)
-        return [] // Return empty array on error
-      }),
-      fetchMaintenanceIssues(unitId, daysBack).catch(err => {
-        console.error('[API] Error fetching maintenance issues:', err)
-        return [] // Return empty array on error
-      }),
-      fetchRepairRequests(unitId, daysBack).catch(err => {
-        console.error('[API] Error fetching repair requests:', err)
-        return [] // Return empty array on error
-      }),
-    ])
+    let visitReports: any[] = []
+    let breakdowns: any[] = []
+    let maintenanceIssues: any[] = []
+    let repairRequests: any[] = []
     
-    console.log(`[API] Fetched data: ${visitReports.length} visits, ${breakdowns.length} breakdowns, ${maintenanceIssues.length} maintenance issues, ${repairRequests.length} repair requests`)
+    try {
+      const [visits, bds, issues, repairs] = await Promise.all([
+        fetchVisitReports(unitId, daysBack).catch(err => {
+          console.error('[API] Error fetching visit reports:', err)
+          const errorMsg = err instanceof Error ? err.message : String(err)
+          console.error('[API] Visit reports error details:', errorMsg)
+          return [] // Return empty array on error
+        }),
+        fetchBreakdowns(unitId, daysBack).catch(err => {
+          console.error('[API] Error fetching breakdowns:', err)
+          const errorMsg = err instanceof Error ? err.message : String(err)
+          console.error('[API] Breakdowns error details:', errorMsg)
+          return [] // Return empty array on error
+        }),
+        fetchMaintenanceIssues(unitId, daysBack).catch(err => {
+          console.error('[API] Error fetching maintenance issues:', err)
+          const errorMsg = err instanceof Error ? err.message : String(err)
+          console.error('[API] Maintenance issues error details:', errorMsg)
+          return [] // Return empty array on error
+        }),
+        fetchRepairRequests(unitId, daysBack).catch(err => {
+          console.error('[API] Error fetching repair requests:', err)
+          const errorMsg = err instanceof Error ? err.message : String(err)
+          console.error('[API] Repair requests error details:', errorMsg)
+          return [] // Return empty array on error
+        }),
+      ])
+      
+      visitReports = visits
+      breakdowns = bds
+      maintenanceIssues = issues
+      repairRequests = repairs
+      
+      console.log(`[API] Fetched data: ${visitReports.length} visits, ${breakdowns.length} breakdowns, ${maintenanceIssues.length} maintenance issues, ${repairRequests.length} repair requests`)
+    } catch (error) {
+      console.error('[API] Critical error during data fetching:', error)
+      throw new Error(`Failed to fetch diagnostic data: ${error instanceof Error ? error.message : String(error)}`)
+    }
     
     // Calculate callback frequency (visits marked as callbacks)
     const callbackFrequency = visitReports.filter((v: any) =>
@@ -110,7 +133,16 @@ export async function POST(request: NextRequest) {
     
     // Generate LLM analysis
     console.log(`[API] Generating LLM analysis`)
-    const analysis = await generateDiagnosticAnalysis(diagnosticData)
+    let analysis
+    try {
+      analysis = await generateDiagnosticAnalysis(diagnosticData)
+      console.log(`[API] LLM analysis completed successfully`)
+    } catch (error) {
+      console.error('[API] Error generating LLM analysis:', error)
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      console.error('[API] LLM error details:', errorMsg)
+      throw new Error(`Failed to generate LLM analysis: ${errorMsg}`)
+    }
     
     // Store diagnostic result for recent diagnostics
     try {
@@ -145,11 +177,23 @@ export async function POST(request: NextRequest) {
       stack: error instanceof Error ? error.stack : undefined,
       name: error instanceof Error ? error.name : undefined,
     }
-    console.error('[API] Error details:', JSON.stringify(errorDetails, null, 2))
+    console.error('[API] Full error details:', JSON.stringify(errorDetails, null, 2))
+    
+    // Log to help with debugging in production
+    if (error instanceof Error) {
+      console.error('[API] Error name:', error.name)
+      console.error('[API] Error message:', error.message)
+      if (error.stack) {
+        console.error('[API] Error stack:', error.stack)
+      }
+    }
+    
     return NextResponse.json(
       { 
         error: 'Failed to analyze diagnostic', 
         details: errorDetails.message,
+        // Include error type for better debugging
+        errorType: errorDetails.name || 'UnknownError',
         // Only include stack in development
         ...(process.env.NODE_ENV === 'development' ? { stack: errorDetails.stack } : {})
       },
