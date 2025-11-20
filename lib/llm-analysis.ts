@@ -4,14 +4,31 @@
 
 import OpenAI from 'openai'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+// Clean and validate API key
+const rawApiKey = process.env.OPENAI_API_KEY || ''
+// Remove "Bearer " prefix if present, trim whitespace, and remove all whitespace
+let apiKey = rawApiKey.trim().replace(/^Bearer\s+/i, '').replace(/\s+/g, '')
 
-// Validate OpenAI API key on module load
-if (!process.env.OPENAI_API_KEY) {
+if (!apiKey) {
   console.warn('[LLM] WARNING: OPENAI_API_KEY is not set. LLM analysis will fail.')
+} else {
+  // Validate API key format
+  if (!apiKey.startsWith('sk-')) {
+    console.warn('[LLM] WARNING: OPENAI_API_KEY does not start with "sk-". This may cause issues.')
+  }
+  // Log first and last few characters for debugging (not the full key)
+  console.log('[LLM] OpenAI API key configured:', {
+    length: apiKey.length,
+    startsWith: apiKey.substring(0, 7),
+    endsWith: apiKey.substring(apiKey.length - 4),
+    hadBearerPrefix: /^Bearer\s+/i.test(rawApiKey),
+    hadWhitespace: /\s/.test(rawApiKey),
+  })
 }
+
+const openai = new OpenAI({
+  apiKey: apiKey,
+})
 
 export interface DiagnosticData {
   unitId: string
