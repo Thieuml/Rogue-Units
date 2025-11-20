@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { fetchUnits } from '@/lib/looker'
+import { fetchBuildingsAndDevices } from '@/lib/looker'
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
+    const countryCode = searchParams.get('country') || 'FR'
     const buildingId = searchParams.get('buildingId')
     
     if (!buildingId) {
@@ -13,7 +14,9 @@ export async function GET(request: NextRequest) {
       )
     }
     
-    const units = await fetchUnits(buildingId)
+    const { devices } = await fetchBuildingsAndDevices(countryCode)
+    const units = devices.filter(d => d.buildingId === buildingId)
+    
     return NextResponse.json({ units })
   } catch (error) {
     console.error('[API] Error fetching units:', error)

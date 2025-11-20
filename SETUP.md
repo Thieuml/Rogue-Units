@@ -33,8 +33,7 @@
 
    Once you have the Look IDs or Query IDs, add them to `.env.local`:
    ```env
-   LOOKER_BUILDINGS_LOOK_ID=123
-   LOOKER_UNITS_LOOK_ID=124
+   LOOKER_BUILDINGS_LOOK_ID=161  # Single Look for both buildings and devices
    LOOKER_VISITS_LOOK_ID=125
    LOOKER_FAULTS_LOOK_ID=126
    ```
@@ -45,20 +44,21 @@
    ```
 
 5. **Open Browser**
-   Navigate to [http://localhost:3000](http://localhost:3000)
+   Navigate to [http://localhost:3002](http://localhost:3002)
 
 ## Looker Query Requirements
 
-### Buildings Query
+### Buildings and Devices Query (Single Look - ID 161)
+Should be filtered by country: `Account Country` = `<countryCode>` (FR, GB, SG, HK)
 Should return:
-- `id` (string) - Building identifier
-- `name` (string) - Building name
+- `Building ID` (string) - Building identifier
+- `Building name` (string) - Building name
+- `Full address` (string) - Building address
+- `Country` (string) - Country code
+- `Device ID` (string) - Device identifier
+- `Device Name` (string) - Device name
 
-### Units Query
-Should accept filter: `building.id` = `<buildingId>`
-Should return:
-- `id` (string) - Unit identifier  
-- `name` (string) - Unit name
+Note: This single Look contains both buildings and devices. The system extracts unique buildings and all devices from this Look.
 
 ### Visit Reports Query
 Should accept filters:
@@ -96,7 +96,7 @@ If your Looker schema uses different field names, you may need to update the fil
 ## Testing
 
 1. Start the dev server: `npm run dev`
-2. Open the UI at http://localhost:3000
+2. Open the UI at http://localhost:3002
 3. Select a building and unit
 4. Optionally add context
 5. Click "Generate Diagnostic PDF"
@@ -119,9 +119,10 @@ If your Looker schema uses different field names, you may need to update the fil
 - Check server logs for PDF generation errors
 
 ### No units showing
-- Verify the units query accepts `building.id` filter
-- Check that the filter field name matches your Looker model
-- Test the query directly in Looker with the filter applied
+- Verify the Look returns both buildings and devices
+- Check that the country filter is working correctly
+- Ensure the field names match (Building ID, Building name, Device ID, Device Name)
+- Test the Look directly in Looker with the country filter applied
 
 ## Production Deployment
 

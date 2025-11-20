@@ -101,8 +101,7 @@ See `.env.example` for full list. Key variables:
 - `LOOKER_API_BASE_URL`
 - `LOOKER_CLIENT_ID`
 - `LOOKER_CLIENT_SECRET`
-- `LOOKER_BUILDINGS_LOOK_ID` (or QUERY_ID)
-- `LOOKER_UNITS_LOOK_ID` (or QUERY_ID)
+- `LOOKER_BUILDINGS_LOOK_ID=161` (Single Look for both buildings and devices)
 - `LOOKER_VISITS_LOOK_ID` (or QUERY_ID)
 - `LOOKER_FAULTS_LOOK_ID` (or QUERY_ID)
 - `OPENAI_API_KEY`

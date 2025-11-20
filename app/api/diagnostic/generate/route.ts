@@ -1,15 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { fetchVisitReports, fetchFaultLogs, fetchIoTAlerts, fetchPartsReplaced } from '@/lib/looker'
+import { fetchVisitReports, fetchBreakdowns, fetchMaintenanceIssues, fetchRepairRequests } from '@/lib/looker'
 import { generateDiagnosticAnalysis, DiagnosticData } from '@/lib/llm-analysis'
 import { generatePDFBuffer, generatePDFFilename } from '@/lib/pdf-generator'
 import { storePDF } from '@/lib/storage'
+import { parseDaysFromContext } from '@/lib/date-parser'
 import path from 'path'
 import fs from 'fs'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { unitId, unitName, buildingId, buildingName, context, daysBack = 90 } = body
+    const { 
+      unitId, 
+      unitName, 
+      buildingId, 
+      buildingName, 
+      context,
+      visitReports: providedVisitReports,
+      breakdowns: providedBreakdowns,
+      maintenanceIssues: providedMaintenanceIssues,
+      repairRequests: providedRepairRequests,
+      analysis: providedAnalysis,
+    } = body
     
     if (!unitId || !unitName || !buildingId || !buildingName) {
       return NextResponse.json(
@@ -18,48 +30,109 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Fetch all diagnostic data
-    console.log(`[API] Fetching diagnostic data for unit ${unitId}`)
-    const [visitReports, faultLogs, iotAlerts, partsReplaced] = await Promise.all([
-      fetchVisitReports(unitId, daysBack),
-      fetchFaultLogs(unitId, daysBack),
-      fetchIoTAlerts(unitId, daysBack),
-      fetchPartsReplaced(unitId, daysBack),
-    ])
+    // Use provided data if available, otherwise fetch
+    let visitReports = providedVisitReports
+    let breakdowns = providedBreakdowns
+    let maintenanceIssues = providedMaintenanceIssues
+    let repairRequests = providedRepairRequests || []
+    let analysis = providedAnalysis
     
-    // Calculate callback frequency (visits marked as callbacks)
-    const callbackFrequency = visitReports.filter((v: any) => 
-      v.type === 'callback' || v.reason?.toLowerCase().includes('callback')
-    ).length
+    if (!visitReports || !breakdowns || !maintenanceIssues || !analysis) {
+      // Parse date range from context (default: 90 days)
+      const daysBack = parseDaysFromContext(context || '')
+      console.log(`[API] Parsed daysBack=${daysBack} from context: "${context}"`)
+      
+      // Fetch visit reports, breakdowns, maintenance issues, and repair requests
+      console.log(`[API] Fetching diagnostic data for device ${unitId} (last ${daysBack} days)`)
+      const fetchedData = await Promise.all([
+        visitReports || fetchVisitReports(unitId, daysBack).catch(err => {
+          console.error('[API] Error fetching visit reports:', err)
+          return []
+        }),
+        breakdowns || fetchBreakdowns(unitId, daysBack).catch(err => {
+          console.error('[API] Error fetching breakdowns:', err)
+          return []
+        }),
+        maintenanceIssues || fetchMaintenanceIssues(unitId, daysBack).catch(err => {
+          console.error('[API] Error fetching maintenance issues:', err)
+          return []
+        }),
+        repairRequests.length > 0 ? repairRequests : fetchRepairRequests(unitId, daysBack).catch(err => {
+          console.error('[API] Error fetching repair requests:', err)
+          return []
+        }),
+      ])
+      
+      visitReports = fetchedData[0] || []
+      breakdowns = fetchedData[1] || []
+      maintenanceIssues = fetchedData[2] || []
+      repairRequests = fetchedData[3] || []
+      
+      console.log(`[API] Fetched data: ${visitReports.length} visits, ${breakdowns.length} breakdowns, ${maintenanceIssues.length} maintenance issues, ${repairRequests.length} repair requests`)
+      
+      // Calculate callback frequency (visits marked as callbacks)
+      const callbackFrequency = visitReports.filter((v: any) =>
+        v.type?.toLowerCase().includes('callout') || v.type?.toLowerCase().includes('breakdown')
+      ).length
+      
+      // Calculate time since last maintenance
+      const maintenanceVisits = visitReports.filter((v: any) =>
+        v.type?.toLowerCase().includes('regular') || v.type?.toLowerCase().includes('maintenance')
+      )
+      const lastMaintenance = maintenanceVisits.length > 0
+        ? new Date(Math.max(...maintenanceVisits.map((v: any) => new Date(v.date || v.completedDate).getTime())))
+        : null
+      const timeSinceLastMaintenance = lastMaintenance
+        ? Math.floor((Date.now() - lastMaintenance.getTime()) / (1000 * 60 * 60 * 24))
+        : undefined
+      
+      // Prepare diagnostic data (no IoT or parts)
+      const diagnosticDataForAnalysis: DiagnosticData = {
+        unitId,
+        unitName,
+        buildingName,
+        visitReports,
+        breakdowns,
+        maintenanceIssues,
+        repairRequests,
+        faultLogs: [],
+        iotAlerts: [],
+        partsReplaced: [],
+        callbackFrequency,
+        timeSinceLastMaintenance,
+        context: context?.trim() || undefined,
+      }
+      
+      // Generate LLM analysis if not provided
+      if (!analysis) {
+        console.log(`[API] Generating LLM analysis`)
+        analysis = await generateDiagnosticAnalysis(diagnosticDataForAnalysis)
+      }
+    } else {
+      console.log(`[API] Using provided diagnostic data: ${visitReports.length} visits, ${breakdowns.length} breakdowns, ${maintenanceIssues.length} maintenance issues, ${repairRequests.length} repair requests`)
+    }
     
-    // Calculate time since last maintenance
-    const maintenanceVisits = visitReports.filter((v: any) => 
-      v.type === 'maintenance' || v.reason?.toLowerCase().includes('maintenance')
-    )
-    const lastMaintenance = maintenanceVisits.length > 0
-      ? new Date(Math.max(...maintenanceVisits.map((v: any) => new Date(v.date).getTime())))
-      : null
-    const timeSinceLastMaintenance = lastMaintenance
-      ? Math.floor((Date.now() - lastMaintenance.getTime()) / (1000 * 60 * 60 * 24))
-      : undefined
+    // Ensure analysis exists
+    if (!analysis) {
+      throw new Error('Analysis data is required for PDF generation')
+    }
     
-    // Prepare diagnostic data
+    // Prepare diagnostic data for PDF (ensure all fields are present)
     const diagnosticData: DiagnosticData = {
       unitId,
       unitName,
       buildingName,
-      visitReports,
-      faultLogs,
-      iotAlerts,
-      partsReplaced,
-      callbackFrequency,
-      timeSinceLastMaintenance,
-      context,
+      visitReports: visitReports || [],
+      breakdowns: breakdowns || [],
+      maintenanceIssues: maintenanceIssues || [],
+      repairRequests: repairRequests || [],
+      faultLogs: [],
+      iotAlerts: [],
+      partsReplaced: [],
+      callbackFrequency: 0,
+      timeSinceLastMaintenance: undefined,
+      context: context?.trim() || undefined,
     }
-    
-    // Generate LLM analysis
-    console.log(`[API] Generating LLM analysis`)
-    const analysis = await generateDiagnosticAnalysis(diagnosticData)
     
     // Generate PDF
     console.log(`[API] Generating PDF`)
@@ -90,7 +163,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Return PDF as response
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(pdfBuffer as any, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${filename}"`,

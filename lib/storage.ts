@@ -104,6 +104,33 @@ export function cleanupExpiredPDFs(): void {
 }
 
 /**
+ * Store diagnostic result (without PDF)
+ */
+export function storeDiagnostic(metadata: {
+  unitId: string
+  unitName: string
+  buildingName: string
+  generatedAt: Date
+  visitReports: any[]
+  breakdowns: any[]
+  maintenanceIssues: any[]
+  repairRequests?: any[]
+  analysis: any
+}): string {
+  initStorage()
+  
+  const timestamp = new Date(metadata.generatedAt).toISOString().replace(/[:.]/g, '-').split('T')[0]
+  const sanitizedName = metadata.unitName.replace(/[^a-zA-Z0-9]/g, '_')
+  const filename = `diagnostic_${sanitizedName}_${metadata.unitId}_${timestamp}.json`
+  const storagePath = path.join(STORAGE_DIR, filename)
+  
+  // Store metadata with full diagnostic data
+  fs.writeFileSync(storagePath, JSON.stringify(metadata, null, 2))
+  
+  return storagePath
+}
+
+/**
  * List all stored PDFs with metadata
  */
 export function listStoredPDFs(): Array<{
@@ -135,6 +162,11 @@ export function listStoredPDFs(): Array<{
       const metadataPath = path.join(STORAGE_DIR, file)
       const pdfFilename = file.replace('.json', '.pdf')
       
+      // Only include if PDF exists
+      if (!fs.existsSync(path.join(STORAGE_DIR, pdfFilename))) {
+        return
+      }
+      
       try {
         const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'))
         const generatedAt = new Date(metadata.generatedAt)
@@ -156,5 +188,73 @@ export function listStoredPDFs(): Array<{
   })
   
   return pdfs.sort((a, b) => b.generatedAt.getTime() - a.generatedAt.getTime())
+}
+
+/**
+ * List all stored diagnostics (including non-PDF ones)
+ */
+export function listStoredDiagnostics(): Array<{
+  unitId: string
+  unitName: string
+  buildingName: string
+  generatedAt: Date
+  daysRemaining: number
+  visitReports: any[]
+  breakdowns: any[]
+  maintenanceIssues: any[]
+  repairRequests?: any[]
+  analysis: any
+}> {
+  if (!fs.existsSync(STORAGE_DIR)) {
+    return []
+  }
+  
+  const files = fs.readdirSync(STORAGE_DIR)
+  const diagnostics: Array<{
+    unitId: string
+    unitName: string
+    buildingName: string
+    generatedAt: Date
+    daysRemaining: number
+    visitReports: any[]
+    breakdowns: any[]
+    maintenanceIssues: any[]
+    repairRequests?: any[]
+    analysis: any
+  }> = []
+  
+  const now = Date.now()
+  
+  files.forEach((file) => {
+    if (file.endsWith('.json') && file.startsWith('diagnostic_')) {
+      const metadataPath = path.join(STORAGE_DIR, file)
+      
+      try {
+        const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'))
+        const generatedAt = new Date(metadata.generatedAt)
+        const daysSinceGeneration = (now - generatedAt.getTime()) / (1000 * 60 * 60 * 24)
+        const daysRemaining = Math.max(0, RETENTION_DAYS - daysSinceGeneration)
+        
+        if (daysRemaining > 0) {
+          diagnostics.push({
+            unitId: metadata.unitId,
+            unitName: metadata.unitName,
+            buildingName: metadata.buildingName,
+            generatedAt,
+            daysRemaining: Math.floor(daysRemaining),
+            visitReports: metadata.visitReports || [],
+            breakdowns: metadata.breakdowns || [],
+            maintenanceIssues: metadata.maintenanceIssues || [],
+            repairRequests: metadata.repairRequests || [],
+            analysis: metadata.analysis || null,
+          })
+        }
+      } catch (error) {
+        console.error(`Error reading diagnostic for ${file}:`, error)
+      }
+    }
+  })
+  
+  return diagnostics.sort((a, b) => b.generatedAt.getTime() - a.generatedAt.getTime())
 }
 

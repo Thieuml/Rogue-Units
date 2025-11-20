@@ -46,14 +46,10 @@ LOOKER_API_BASE_URL=https://your-looker-instance.com
 LOOKER_CLIENT_ID=your_client_id
 LOOKER_CLIENT_SECRET=your_client_secret
 
-# Looker Look/Query IDs (use either Look ID or Query ID for each)
-LOOKER_BUILDINGS_LOOK_ID=123
-# OR
-# LOOKER_BUILDINGS_QUERY_ID=456
-
-LOOKER_UNITS_LOOK_ID=124
-# OR
-# LOOKER_UNITS_QUERY_ID=457
+# Looker Look/Query IDs
+# Buildings and Devices (from single Look - ID 161)
+# This Look contains both buildings and devices, filtered by country
+LOOKER_BUILDINGS_LOOK_ID=161
 
 LOOKER_VISITS_LOOK_ID=125
 # OR
@@ -89,7 +85,7 @@ Run the development server:
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3002](http://localhost:3002) in your browser.
 
 ## Building for Production
 
@@ -102,16 +98,15 @@ npm start
 
 The system expects Looker queries/looks that return data in the following formats:
 
-### Buildings
-- Must include: `id`, `name` (or similar fields)
+### Buildings and Devices (Look 161)
+- Must include: `building.building_id`, `building.name`, `building.full_address`, `device.device_id`, `device.location`
+- **Must be configured with filterable field**: `account.billing_country_code` (for country filtering)
 
-### Units
-- Must include: `id`, `name` (or similar fields)
-- Must be filterable by `building.id`
-
-### Visit Reports
-- Must include: `date`, `type` (or `reason`), and other relevant fields
-- Must be filterable by `unit.id` and `visit.date`
+### Visit Reports (Look 162) - **IMPORTANT CONFIGURATION**
+- Must include: `device.device_id`, `task.completed_date`, `done_by_engineer.full_name`, `task.type`, `task_summary.end_status`, `task_summary.global_comment`, `task.pdf_report`, `task_summary.defect_origin`, `task_summary.failure_reasons`, `task_summary.failure_location`
+- **CRITICAL**: Must be configured with filterable fields:
+  - `device.device_id` (for device filtering)
+  - `task.completed_date` (for date range filtering)
 
 ### Fault Logs
 - Must include: `date` and fault details
@@ -124,6 +119,42 @@ The system expects Looker queries/looks that return data in the following format
 ### Parts Replaced (Optional)
 - Must include: `replaced_date` and part details
 - Must be filterable by `unit.id` and `part.replaced_date`
+
+### ⚠️ **CRITICAL: Configuring Filterable Fields in Looker (MANDATORY)**
+
+**This is a required setup step - the application will NOT work without it.**
+
+**Why this is critical**: The Looker API's `run_look` method only applies filters if those fields are explicitly configured as **filterable** in the Look's definition. If filters are not configured:
+- ❌ The API returns ALL data (up to 5000 row limit) instead of filtered data
+- ❌ Application receives wrong data for the selected device
+- ❌ **Data may be incomplete** if there are >5000 total rows (missing rows 5001+)
+- ❌ **Application will throw an error** to prevent showing incomplete data
+
+**How to configure filterable fields** (must be done by a Looker admin):
+
+1. Open the Look in Looker (e.g., Look 162 for Visit Reports)
+   - Direct link: `https://wemaintain.cloud.looker.com/looks/162`
+2. Click "Edit" to enter edit mode
+3. Click on the "Filters" tab/section
+4. Add the required filter fields:
+   - **For Visit Reports Look (162) - REQUIRED:**
+     - Add filter: `device.device_id` (set to "is equal to" or "matches")
+     - Add filter: `task.completed_date` (set to "is on or after")
+   - For Buildings Look (161):
+     - Add filter: `account.billing_country_code` (set to "is equal to")
+5. **Important**: Leave the filter values empty/blank - the API passes values dynamically
+6. Save the Look
+7. Test by running the application - you should see `filterWorking: ✓ YES` in the logs
+
+**What happens if not configured:**
+The application will throw a clear error:
+```
+Error: Looker filters not configured: Look 162 must have filterable fields 
+for device.device_id and task.completed_date. Configure Look 162 in Looker 
+before using this application.
+```
+
+This is **intentional** - the application refuses to run with potentially incomplete data. See `LOOKER_FILTER_FIX.md` for detailed troubleshooting.
 
 **Note**: Field names may vary based on your Looker schema. You may need to adjust the filter field names in `lib/looker.ts` to match your actual Looker model.
 
