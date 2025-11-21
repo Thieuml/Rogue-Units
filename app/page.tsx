@@ -1123,22 +1123,17 @@ export default function Home() {
                                             <span>{translateStateKey(issue.stateKey || '')}{issue.problemKey ? `: ${translateProblemKey(issue.problemKey)}` : ''}</span>
                                           </p>
                                         ))}
-                                                    {/* Show parts from repair requests */}
-                                                    {diagnosticResult.repairRequests?.filter((rr: any) => {
-                                                      if (!rr.hasPartAttached || rr.status !== 'DONE') return false
-                                                      const rrDate = rr.stateStartDate || rr.requestedDate
-                                                      if (!rrDate) return false
-                                                      const rrDateObj = new Date(rrDate)
+                                                    {/* Show parts from analysis partsReplaced (already processed) */}
+                                                    {diagnosticResult.analysis?.partsReplaced?.filter((part: any) => {
+                                                      if (!part.replacementDate) return false
+                                                      const partDate = new Date(part.replacementDate)
                                                       const vDate = new Date(visitDate)
-                                                      return Math.abs(rrDateObj.getTime() - vDate.getTime()) < 7 * 24 * 60 * 60 * 1000 // Within 7 days
-                                                    }).slice(0, 2).map((rr: any, rIdx: number) => {
-                                                      const partName = extractGBTranslation(rr.partName)
-                                                      return (
-                                                        <p key={`rr-${rIdx}`} className="text-black text-xs break-words">
-                                                          🔧 Part replaced: {partName}{rr.partFamily ? ` (${rr.partFamily})` : ''}
-                                                        </p>
-                                                      )
-                                                    })}
+                                                      return Math.abs(partDate.getTime() - vDate.getTime()) < 7 * 24 * 60 * 60 * 1000 // Within 7 days
+                                                    }).slice(0, 2).map((part: any, pIdx: number) => (
+                                                      <p key={`part-${pIdx}`} className="text-black text-xs break-words">
+                                                        🔧 Part replaced: {part.partName || 'Part'}
+                                                      </p>
+                                                    ))}
                                                   </div>
                                                 </div>
                                               </div>
@@ -1187,22 +1182,17 @@ export default function Home() {
                                             <span>{translateStateKey(issue.stateKey || '')}{issue.problemKey ? `: ${translateProblemKey(issue.problemKey)}` : ''}</span>
                                           </p>
                                         ))}
-                                        {/* Show parts from repair requests */}
-                                        {diagnosticResult.repairRequests?.filter((rr: any) => {
-                                          if (!rr.hasPartAttached || rr.status !== 'DONE') return false
-                                          const rrDate = rr.stateStartDate || rr.requestedDate
-                                          if (!rrDate) return false
-                                          const rrDateObj = new Date(rrDate)
+                                        {/* Show parts from analysis partsReplaced (already processed) */}
+                                        {diagnosticResult.analysis?.partsReplaced?.filter((part: any) => {
+                                          if (!part.replacementDate) return false
+                                          const partDate = new Date(part.replacementDate)
                                           const visitDate = event.date
-                                          return Math.abs(rrDateObj.getTime() - visitDate.getTime()) < 7 * 24 * 60 * 60 * 1000 // Within 7 days
-                                        }).slice(0, 2).map((rr: any, rIdx: number) => {
-                                          const partName = extractGBTranslation(rr.partName)
-                                          return (
-                                            <p key={`rr-${rIdx}`} className="text-black text-xs break-words">
-                                              🔧 Part replaced: {partName}{rr.partFamily ? ` (${rr.partFamily})` : ''}
-                                            </p>
-                                          )
-                                        })}
+                                          return Math.abs(partDate.getTime() - visitDate.getTime()) < 7 * 24 * 60 * 60 * 1000 // Within 7 days
+                                        }).slice(0, 2).map((part: any, pIdx: number) => (
+                                          <p key={`part-${pIdx}`} className="text-black text-xs break-words">
+                                            🔧 Part replaced: {part.partName || 'Part'}
+                                          </p>
+                                        ))}
                                       </div>
                                     </div>
                                   </div>
