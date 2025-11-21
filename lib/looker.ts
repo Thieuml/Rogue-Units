@@ -1237,7 +1237,56 @@ export async function fetchRepairRequests(deviceId: string, daysBack: number = 9
       const isChargeable = row['repair_request.is_chargeable'] || false
       const hasPartAttached = row['request_item.has_part_attached'] || false
       const itemType = row['request_item.type'] || ''
-      const partName = row['part.name'] || ''
+      // Extract part name - handle translations format: "translations":[["en-GB","Name"]]
+      const partNameRaw = row['part.name'] || ''
+      let partName = ''
+      
+      // Helper function to extract en-GB translation
+      const extractGBTranslation = (value: any): string => {
+        if (!value) return ''
+        
+        // If it's already a string, try to parse as JSON
+        if (typeof value === 'string') {
+          // Check if it looks like JSON
+          if (value.trim().startsWith('{') || value.trim().startsWith('[')) {
+            try {
+              const parsed = JSON.parse(value)
+              return extractGBTranslation(parsed)
+            } catch {
+              // Not valid JSON, return as-is
+              return value
+            }
+          }
+          return value
+        }
+        
+        // If it's an object with translations property
+        if (value && typeof value === 'object') {
+          if (value.translations && Array.isArray(value.translations)) {
+            // Find en-GB translation: translations is array of [["en-GB","Name"], ...]
+            const gbTranslation = value.translations.find((t: any) => 
+              Array.isArray(t) && t.length >= 2 && t[0] === 'en-GB'
+            )
+            if (gbTranslation && Array.isArray(gbTranslation) && gbTranslation[1]) {
+              return String(gbTranslation[1])
+            }
+            // Fallback to first translation if en-GB not found
+            const firstTranslation = value.translations.find((t: any) => 
+              Array.isArray(t) && t.length >= 2 && t[1]
+            )
+            if (firstTranslation && Array.isArray(firstTranslation) && firstTranslation[1]) {
+              return String(firstTranslation[1])
+            }
+          }
+          // If object but no translations, try to stringify
+          return String(value)
+        }
+        
+        return String(value || '')
+      }
+      
+      partName = extractGBTranslation(partNameRaw)
+      
       const partFamily = row['part.family'] || ''
       const partSubFamily = row['part.sub_family'] || ''
 
