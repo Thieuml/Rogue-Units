@@ -80,3 +80,18 @@ export function translateStateKey(stateKey: string): string {
   return translated.join(' ')
 }
 
+/**
+ * Translate problem keys to plain English
+ * e.g. OUT_OF_ALIGNMENT => Out of Alignment
+ */
+export function translateProblemKey(problemKey: string): string {
+  if (!problemKey) return problemKey
+  
+  // Replace underscores with spaces and capitalize each word
+  return problemKey
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
+

@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import useSWR from 'swr'
 import { WeMaintainLogo } from '@/components/WeMaintainLogo'
-import { translateStateKey } from '@/lib/state-key-translator'
+import { translateStateKey, translateProblemKey } from '@/lib/state-key-translator'
 
 const fetcher = async (url: string) => {
   console.log('[Debug] Fetching URL:', url)
@@ -536,8 +536,8 @@ export default function Home() {
             </div>
           )}
           
-          {/* Diagnostic Form - Only show when not viewing recent results */}
-          {!showRecentResults && (
+          {/* Diagnostic Form - Only show when not viewing recent results and no diagnostic result */}
+          {!showRecentResults && !diagnosticResult && (
             <>
               <h1 className="text-3xl font-bold mb-8 text-gray-900">Lift Diagnostic Summary</h1>
               
@@ -741,6 +741,50 @@ export default function Home() {
       {/* Diagnostic Results */}
       {diagnosticResult && (
         <div className="mt-6 space-y-6">
+          {/* Navigation Bar */}
+          <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => {
+                    setDiagnosticResult(null)
+                    setShowRecentResults(false)
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  Launch New Diagnostic
+                </button>
+                <button
+                  onClick={() => {
+                    setDiagnosticResult(null)
+                    setShowRecentResults(true)
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Recent Diagnostics
+                </button>
+              </div>
+              <button
+                onClick={() => {
+                  setDiagnosticResult(null)
+                  setShowRecentResults(false)
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
             <div className="flex justify-between items-start mb-4">
               <div>
@@ -754,12 +798,6 @@ export default function Home() {
                   Generated: {diagnosticResult.generatedAt.toLocaleString()}
                 </p>
               </div>
-      <button
-                onClick={() => setDiagnosticResult(null)}
-                className="text-gray-400 hover:text-gray-600"
-      >
-                ✕
-      </button>
             </div>
             
             {/* Tabs */}
@@ -1026,18 +1064,21 @@ export default function Home() {
                                                     {(visit.comment || visit.globalComment) && (
                                                       <p className="text-gray-600 break-words">{visit.comment || visit.globalComment}</p>
                                                     )}
-                                                    {/* Show maintenance issues */}
-                                                    {diagnosticResult.maintenanceIssues?.filter((issue: any) => {
-                                                      const issueDate = issue.completedDate
-                                                      if (!issueDate) return false
-                                                      const iDate = new Date(issueDate)
-                                                      const vDate = new Date(visitDate)
-                                                      return Math.abs(iDate.getTime() - vDate.getTime()) < 24 * 60 * 60 * 1000 // Same day
-                                                    }).slice(0, 2).map((issue: any, iIdx: number) => (
-                                                      <p key={iIdx} className="text-orange-700 text-xs break-words">
-                                                        {translateStateKey(issue.stateKey || '')}{issue.problemKey ? `: ${issue.problemKey}` : ''}
-                                                      </p>
-                                                    ))}
+                                        {/* Show maintenance issues */}
+                                        {diagnosticResult.maintenanceIssues?.filter((issue: any) => {
+                                          const issueDate = issue.completedDate
+                                          if (!issueDate) return false
+                                          const iDate = new Date(issueDate)
+                                          const vDate = new Date(visitDate)
+                                          return Math.abs(iDate.getTime() - vDate.getTime()) < 24 * 60 * 60 * 1000 // Same day
+                                        }).slice(0, 2).map((issue: any, iIdx: number) => (
+                                          <p key={iIdx} className="text-black text-xs break-words flex items-start gap-1">
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 mt-0.5">
+                                              <path d="M9.10835 1.28513C9.49052 1.49532 9.80505 1.80985 10.0152 2.19201L14.724 10.7533C15.3361 11.8664 14.9301 13.2649 13.8171 13.877C13.4775 14.0638 13.0962 14.1618 12.7087 14.1618H3.29121C2.02096 14.1618 0.991211 13.132 0.991211 11.8618C0.991211 11.4742 1.08914 11.0929 1.27591 10.7533L5.98464 2.19201C6.5968 1.079 7.99534 0.672972 9.10835 1.28513ZM7.12372 2.81851L2.41499 11.3798C2.33379 11.5275 2.29121 11.6933 2.29121 11.8618C2.29121 12.414 2.73893 12.8618 3.29121 12.8618H12.7087C12.8772 12.8618 13.0429 12.8192 13.1906 12.738C13.6745 12.4718 13.851 11.8638 13.5849 11.3798L8.87616 2.81851C8.78477 2.65235 8.64802 2.5156 8.48186 2.42421C7.99794 2.15806 7.38988 2.33459 7.12372 2.81851ZM7.99994 9.92539C8.44177 9.92539 8.79994 10.2836 8.79994 10.7254C8.79994 11.1672 8.44177 11.5254 7.99994 11.5254C7.55811 11.5254 7.19994 11.1672 7.19994 10.7254C7.19994 10.2836 7.55811 9.92539 7.99994 9.92539ZM7.99994 4.72539C8.32629 4.72539 8.59647 4.9659 8.64289 5.27934L8.64994 5.37539V8.30832C8.64994 8.6673 8.35892 8.95832 7.99994 8.95832C7.67359 8.95832 7.40341 8.71781 7.35699 8.40437L7.34994 8.30832V5.37539C7.34994 5.0164 7.64095 4.72539 7.99994 4.72539Z" fill="#DC2626"/>
+                                            </svg>
+                                            <span>{translateStateKey(issue.stateKey || '')}{issue.problemKey ? `: ${translateProblemKey(issue.problemKey)}` : ''}</span>
+                                          </p>
+                                        ))}
                                                     {/* Show parts from repair requests */}
                                                     {diagnosticResult.repairRequests?.filter((rr: any) => {
                                                       if (!rr.hasPartAttached || rr.status !== 'DONE') return false
@@ -1092,8 +1133,11 @@ export default function Home() {
                                           const visitDate = event.date
                                           return Math.abs(iDate.getTime() - visitDate.getTime()) < 24 * 60 * 60 * 1000 // Same day
                                         }).slice(0, 2).map((issue: any, iIdx: number) => (
-                                          <p key={iIdx} className="text-orange-700 text-xs break-words">
-                                            {translateStateKey(issue.stateKey || '')}{issue.problemKey ? `: ${issue.problemKey}` : ''}
+                                          <p key={iIdx} className="text-black text-xs break-words flex items-start gap-1">
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 mt-0.5">
+                                              <path d="M9.10835 1.28513C9.49052 1.49532 9.80505 1.80985 10.0152 2.19201L14.724 10.7533C15.3361 11.8664 14.9301 13.2649 13.8171 13.877C13.4775 14.0638 13.0962 14.1618 12.7087 14.1618H3.29121C2.02096 14.1618 0.991211 13.132 0.991211 11.8618C0.991211 11.4742 1.08914 11.0929 1.27591 10.7533L5.98464 2.19201C6.5968 1.079 7.99534 0.672972 9.10835 1.28513ZM7.12372 2.81851L2.41499 11.3798C2.33379 11.5275 2.29121 11.6933 2.29121 11.8618C2.29121 12.414 2.73893 12.8618 3.29121 12.8618H12.7087C12.8772 12.8618 13.0429 12.8192 13.1906 12.738C13.6745 12.4718 13.851 11.8638 13.5849 11.3798L8.87616 2.81851C8.78477 2.65235 8.64802 2.5156 8.48186 2.42421C7.99794 2.15806 7.38988 2.33459 7.12372 2.81851ZM7.99994 9.92539C8.44177 9.92539 8.79994 10.2836 8.79994 10.7254C8.79994 11.1672 8.44177 11.5254 7.99994 11.5254C7.55811 11.5254 7.19994 11.1672 7.19994 10.7254C7.19994 10.2836 7.55811 9.92539 7.99994 9.92539ZM7.99994 4.72539C8.32629 4.72539 8.59647 4.9659 8.64289 5.27934L8.64994 5.37539V8.30832C8.64994 8.6673 8.35892 8.95832 7.99994 8.95832C7.67359 8.95832 7.40341 8.71781 7.35699 8.40437L7.34994 8.30832V5.37539C7.34994 5.0164 7.64095 4.72539 7.99994 4.72539Z" fill="#DC2626"/>
+                                            </svg>
+                                            <span>{translateStateKey(issue.stateKey || '')}{issue.problemKey ? `: ${translateProblemKey(issue.problemKey)}` : ''}</span>
                                           </p>
                                         ))}
                                         {/* Show parts from repair requests */}
@@ -1196,7 +1240,7 @@ export default function Home() {
                                             {translateStateKey(issue.stateKey || 'Component')}
                                           </span>
                                           {issue.problemKey && (
-                                            <span className="text-gray-600">: {issue.problemKey}</span>
+                                            <span className="text-gray-600">: {translateProblemKey(issue.problemKey)}</span>
                                           )}
                                           {issue.followUp && (
                                             <span className={`ml-1 text-xs ${
@@ -1254,7 +1298,7 @@ export default function Home() {
                   <div className="mb-6">
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">Summary</h3>
                     <p className="text-gray-700 leading-relaxed">
-                      {diagnosticResult.analysis.executiveSummary}
+                      {diagnosticResult.analysis.executiveSummary.replace(/at Unit /gi, '').replace(/at /gi, '')}
                     </p>
                   </div>
                 )}
@@ -1332,75 +1376,31 @@ export default function Home() {
               <>
                 {/* Components History */}
                 <div className="mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Components History</h3>
-                  
-                  {/* Parts Replaced */}
-                  {diagnosticResult.analysis?.partsReplaced && diagnosticResult.analysis.partsReplaced.length > 0 && (
-                    <div className="mb-6">
-                      <h4 className="text-md font-semibold text-gray-800 mb-3">Parts Replaced</h4>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Part Name</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Family</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Component</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Replacement Date</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Request #</th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {diagnosticResult.analysis.partsReplaced.map((part: any, idx: number) => (
-                              <tr key={idx} className="hover:bg-gray-50">
-                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                                  {part.partName || 'N/A'}
-                                </td>
-                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                                  {part.partFamily || 'N/A'}
-                                  {part.partSubFamily && ` / ${part.partSubFamily}`}
-                                </td>
-                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                                  {part.component || 'N/A'}
-                                </td>
-                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                                  {part.replacementDate ? formatEventDate(part.replacementDate, false) : 'N/A'}
-                                </td>
-                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                  {part.repairRequestNumber || 'N/A'}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Consolidated Components History */}
                   {(() => {
-                    // Collect components from maintenance issues, breakdowns, and parts replaced
+                    // Build comprehensive component map with all details
                     const componentsMap = new Map<string, {
                       component: string
-                      faults: number
-                      breakdowns: number
+                      faults: Array<{ component: string; problem: string; date: string; resolved: boolean }>
+                      breakdowns: Array<{ breakdownId: string; date: string; duration: string }>
                       partsReplaced: Array<{ partName: string; replacementDate: string; requestNumber: string }>
-                      lastIssue?: string
                     }>()
 
-                    // From maintenance issues
+                    // From maintenance issues (faults)
                     diagnosticResult.maintenanceIssues?.forEach((issue: any) => {
                       const component = translateStateKey(issue.stateKey || '')
                       if (component && component !== 'N/A') {
                         const existing = componentsMap.get(component) || { 
                           component, 
-                          faults: 0, 
-                          breakdowns: 0, 
+                          faults: [], 
+                          breakdowns: [], 
                           partsReplaced: [] 
                         }
-                        existing.faults++
-                        if (!existing.lastIssue || issue.completedDate > existing.lastIssue) {
-                          existing.lastIssue = issue.completedDate
-                        }
+                        existing.faults.push({
+                          component: translateStateKey(issue.stateKey || ''),
+                          problem: issue.problemKey ? translateProblemKey(issue.problemKey) : '',
+                          date: issue.completedDate || '',
+                          resolved: issue.followUp === true || issue.followUp?.toLowerCase().includes('resolved') || issue.followUp?.toLowerCase().includes('yes')
+                        })
                         componentsMap.set(component, existing)
                       }
                     })
@@ -1412,14 +1412,18 @@ export default function Home() {
                         if (component && component !== 'N/A') {
                           const existing = componentsMap.get(component) || { 
                             component, 
-                            faults: 0, 
-                            breakdowns: 0, 
+                            faults: [], 
+                            breakdowns: [], 
                             partsReplaced: [] 
                           }
-                          existing.breakdowns++
-                          if (!existing.lastIssue || bd.startTime > existing.lastIssue) {
-                            existing.lastIssue = bd.startTime
-                          }
+                          const duration = bd.minutesDuration 
+                            ? `${Math.floor(bd.minutesDuration / 60)}h ${bd.minutesDuration % 60}m`
+                            : 'N/A'
+                          existing.breakdowns.push({
+                            breakdownId: bd.breakdownId || '',
+                            date: bd.startTime || '',
+                            duration
+                          })
                           componentsMap.set(component, existing)
                         }
                       }
@@ -1458,91 +1462,128 @@ export default function Home() {
                           // Create new entry for component with only parts replaced
                           componentsMap.set(componentName, {
                             component: componentName,
-                            faults: 0,
-                            breakdowns: 0,
+                            faults: [],
+                            breakdowns: [],
                             partsReplaced: [{
                               partName: part.partName || 'N/A',
                               replacementDate: part.replacementDate || '',
                               requestNumber: part.repairRequestNumber || ''
-                            }],
-                            lastIssue: part.replacementDate || undefined
+                            }]
                           })
                         }
                       }
                     })
 
                     const components = Array.from(componentsMap.values()).sort((a, b) => {
-                      const aTotal = a.faults + a.breakdowns + a.partsReplaced.length
-                      const bTotal = b.faults + b.breakdowns + b.partsReplaced.length
+                      const aTotal = a.faults.length + a.breakdowns.length + a.partsReplaced.length
+                      const bTotal = b.faults.length + b.breakdowns.length + b.partsReplaced.length
                       return bTotal - aTotal
                     })
 
                     if (components.length > 0) {
                       return (
-                        <div className="mb-6">
-                          <h4 className="text-md font-semibold text-gray-800 mb-3">Components History</h4>
-                          <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                              <thead className="bg-gray-50">
-                                <tr>
-                                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Component</th>
-                                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Faults</th>
-                                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Breakdowns</th>
-                                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parts Replaced</th>
-                                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Issue</th>
-                                </tr>
-                              </thead>
-                              <tbody className="bg-white divide-y divide-gray-200">
-                                {components.map((comp, idx) => (
-                                  <tr key={idx} className="hover:bg-gray-50">
-                                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                                      {comp.component}
-                                    </td>
-                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                                      {comp.faults}
-                                    </td>
-                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                                      {comp.breakdowns}
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">
-                                      {comp.partsReplaced.length > 0 ? (
-                                        <div className="space-y-1">
-                                          {comp.partsReplaced.map((part, pIdx) => (
-                                            <div key={pIdx} className="text-xs">
-                                              <span className="font-medium">{part.partName}</span>
-                                              {part.replacementDate && (
-                                                <span className="text-gray-500 ml-1">
-                                                  ({formatEventDate(part.replacementDate, false)})
-                                                </span>
-                                              )}
-                                            </div>
-                                          ))}
+                        <div className="space-y-6">
+                          {components.map((comp, idx) => (
+                            <div key={idx} className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
+                              <h4 className="text-lg font-semibold text-gray-900 mb-4">{comp.component}</h4>
+                              
+                              {/* Related Faults */}
+                              {comp.faults.length > 0 && (
+                                <div className="mb-4">
+                                  <h5 className="text-sm font-semibold text-gray-700 mb-2">Related Faults ({comp.faults.length})</h5>
+                                  <div className="space-y-2">
+                                    {comp.faults.map((fault, fIdx) => (
+                                      <div key={fIdx} className="text-sm text-gray-600 pl-4 border-l-2 border-orange-200">
+                                        <div className="flex items-start gap-2">
+                                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 mt-0.5">
+                                            <path d="M9.10835 1.28513C9.49052 1.49532 9.80505 1.80985 10.0152 2.19201L14.724 10.7533C15.3361 11.8664 14.9301 13.2649 13.8171 13.877C13.4775 14.0638 13.0962 14.1618 12.7087 14.1618H3.29121C2.02096 14.1618 0.991211 13.132 0.991211 11.8618C0.991211 11.4742 1.08914 11.0929 1.27591 10.7533L5.98464 2.19201C6.5968 1.079 7.99534 0.672972 9.10835 1.28513ZM7.12372 2.81851L2.41499 11.3798C2.33379 11.5275 2.29121 11.6933 2.29121 11.8618C2.29121 12.414 2.73893 12.8618 3.29121 12.8618H12.7087C12.8772 12.8618 13.0429 12.8192 13.1906 12.738C13.6745 12.4718 13.851 11.8638 13.5849 11.3798L8.87616 2.81851C8.78477 2.65235 8.64802 2.5156 8.48186 2.42421C7.99794 2.15806 7.38988 2.33459 7.12372 2.81851ZM7.99994 9.92539C8.44177 9.92539 8.79994 10.2836 8.79994 10.7254C8.79994 11.1672 8.44177 11.5254 7.99994 11.5254C7.55811 11.5254 7.19994 11.1672 7.19994 10.7254C7.19994 10.2836 7.55811 9.92539 7.99994 9.92539ZM7.99994 4.72539C8.32629 4.72539 8.59647 4.9659 8.64289 5.27934L8.64994 5.37539V8.30832C8.64994 8.6673 8.35892 8.95832 7.99994 8.95832C7.67359 8.95832 7.40341 8.71781 7.35699 8.40437L7.34994 8.30832V5.37539C7.34994 5.0164 7.64095 4.72539 7.99994 4.72539Z" fill="#DC2626"/>
+                                          </svg>
+                                          <div className="flex-1">
+                                            <span className="font-medium">{fault.component}</span>
+                                            {fault.problem && <span className="text-gray-600">: {fault.problem}</span>}
+                                            {fault.date && (
+                                              <span className="text-gray-500 ml-2">({formatEventDate(fault.date, false)})</span>
+                                            )}
+                                            {fault.resolved && (
+                                              <span className="text-green-600 ml-2 text-xs">✓ Resolved</span>
+                                            )}
+                                          </div>
                                         </div>
-                                      ) : (
-                                        <span className="text-gray-400">-</span>
-                                      )}
-                                    </td>
-                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                                      {comp.lastIssue ? formatEventDate(comp.lastIssue, false) : 'N/A'}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Related Breakdowns */}
+                              {comp.breakdowns.length > 0 && (
+                                <div className="mb-4">
+                                  <h5 className="text-sm font-semibold text-gray-700 mb-2">Related Breakdowns ({comp.breakdowns.length})</h5>
+                                  <div className="space-y-2">
+                                    {comp.breakdowns.map((bd, bIdx) => (
+                                      <div key={bIdx} className="text-sm text-gray-600 pl-4 border-l-2 border-red-200">
+                                        <div>
+                                          <span className="font-medium">Breakdown</span>
+                                          {bd.date && (
+                                            <span className="text-gray-500 ml-2">({formatEventDate(bd.date, false)})</span>
+                                          )}
+                                          {bd.duration && bd.duration !== 'N/A' && (
+                                            <span className="text-gray-500 ml-2">- Duration: {bd.duration}</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Parts Replaced */}
+                              {comp.partsReplaced.length > 0 && (
+                                <div>
+                                  <h5 className="text-sm font-semibold text-gray-700 mb-2">Parts Replaced ({comp.partsReplaced.length})</h5>
+                                  <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                      <thead className="bg-gray-50">
+                                        <tr>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Part</th>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Replacement Date</th>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Request Number</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="bg-white divide-y divide-gray-200">
+                                        {comp.partsReplaced.map((part, pIdx) => (
+                                          <tr key={pIdx} className="hover:bg-gray-50">
+                                            <td className="px-4 py-2 text-sm font-medium text-gray-900">
+                                              {part.partName}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-gray-600">
+                                              {part.replacementDate ? formatEventDate(part.replacementDate, false) : 'N/A'}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-gray-500">
+                                              {part.requestNumber || 'N/A'}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+
+                              {comp.faults.length === 0 && comp.breakdowns.length === 0 && comp.partsReplaced.length === 0 && (
+                                <p className="text-sm text-gray-500">No related data for this component.</p>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       )
                     }
-                    return null
+                    return (
+                      <div className="text-center py-8 text-gray-500">
+                        No component history available for this period.
+                      </div>
+                    )
                   })()}
-
-                  {(!diagnosticResult.analysis?.partsReplaced || diagnosticResult.analysis.partsReplaced.length === 0) && 
-                   (!diagnosticResult.maintenanceIssues || diagnosticResult.maintenanceIssues.length === 0) &&
-                   (!diagnosticResult.breakdowns || diagnosticResult.breakdowns.length === 0) && (
-                    <div className="text-center py-8 text-gray-500">
-                      No component history available for this period.
-                    </div>
-                  )}
                 </div>
               </>
             )}

@@ -193,7 +193,9 @@ function buildPrompt(data: DiagnosticData): string {
     }
   })
   
-  return `You are a technical expert analyzing lift diagnostic data. Analyze the following data for Unit ${data.unitName} in Building ${data.buildingName}.
+  return `You are a technical expert analyzing lift diagnostic data. Analyze the following data for the lift ${data.unitName} in Building ${data.buildingName}.
+
+**IMPORTANT:** When writing the executive summary, refer to the unit as "the lift ${data.unitName}" or "${data.unitName}" - do NOT use "at Unit" or "at" before the unit name. For example, write "The lift duplex gauche in Building..." NOT "The lift at Unit duplex gauche in Building...".
 
 ${contextNote}
 
