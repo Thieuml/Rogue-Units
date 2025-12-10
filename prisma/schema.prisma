@@ -16,6 +16,11 @@ model Diagnostic {
   buildingName    String
   generatedAt     DateTime @default(now())
   
+  // Country and user tracking
+  country         String   @default("FR")
+  userId          String?
+  userName        String?
+  
   // Store full diagnostic data as JSON
   visitReports    Json     @default("[]")
   breakdowns      Json     @default("[]")
@@ -28,5 +33,7 @@ model Diagnostic {
   @@index([generatedAt])
   @@index([unitName])
   @@index([buildingName])
+  @@index([country])
+  @@index([userId])
   @@map("diagnostics")
 }

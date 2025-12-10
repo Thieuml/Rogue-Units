@@ -50,15 +50,19 @@ interface Device {
 }
 
 interface DiagnosticResult {
+  id?: string
   unitId: string
   unitName: string
   buildingName: string
+  country?: string
+  userId?: string | null
+  userName?: string | null
   visitReports: any[]
   breakdowns: any[]
   maintenanceIssues: any[]
   repairRequests?: any[]
   analysis: any
-  generatedAt: Date
+  generatedAt: Date | string
 }
 
 const COUNTRIES = [
@@ -180,6 +184,12 @@ export default function Home() {
   const [recentResults, setRecentResults] = useState<DiagnosticResult[]>([])
   const [activeTab, setActiveTab] = useState<'summary' | 'visits' | 'analysis' | 'components'>('summary')
   
+  // Filter states
+  const [showMyDiagnostics, setShowMyDiagnostics] = useState(false)
+  const [dateFilterStart, setDateFilterStart] = useState<string>('')
+  const [dateFilterEnd, setDateFilterEnd] = useState<string>('')
+  const [unitFilter, setUnitFilter] = useState<string>('')
+  
   const buildingInputRef = useRef<HTMLInputElement>(null)
   const deviceInputRef = useRef<HTMLInputElement>(null)
   const buildingDropdownRef = useRef<HTMLDivElement>(null)
@@ -236,19 +246,37 @@ export default function Home() {
     }
   }, [data, dataError, dataLoading, country])
   
-  // Load recent results from API
-  useEffect(() => {
-    console.log('[UI] Fetching recent diagnostics...')
-    fetch('/api/diagnostic/recent')
+  // Load recent results from API with filters
+  const loadRecentDiagnostics = () => {
+    const params = new URLSearchParams()
+    params.append('country', country)
+    
+    if (showMyDiagnostics) {
+      params.append('userId', 'me')
+    }
+    
+    if (dateFilterStart) {
+      params.append('startDate', dateFilterStart)
+    }
+    
+    if (dateFilterEnd) {
+      params.append('endDate', dateFilterEnd)
+    }
+    
+    if (unitFilter.trim()) {
+      params.append('unitName', unitFilter.trim())
+    }
+    
+    console.log('[UI] Fetching recent diagnostics with filters:', params.toString())
+    fetch(`/api/diagnostic/recent?${params.toString()}`)
       .then(res => {
         console.log('[UI] Recent diagnostics response status:', res.status)
         return res.json()
       })
-        .then(data => {
+      .then(data => {
         console.log('[UI] Recent diagnostics data received:', {
           hasResults: !!data.results,
           resultsCount: data.results?.length || 0,
-          results: data.results,
         })
         if (data.results) {
           setRecentResults(data.results)
@@ -256,13 +284,19 @@ export default function Home() {
         } else {
           console.warn('[UI] No results in response:', data)
           setRecentResults([])
-          }
-        })
-        .catch(err => {
+        }
+      })
+      .catch(err => {
         console.error('[UI] Error loading recent results:', err)
         setRecentResults([])
       })
-  }, [])
+  }
+  
+  useEffect(() => {
+    if (showRecentResults) {
+      loadRecentDiagnostics()
+    }
+  }, [showRecentResults, country, showMyDiagnostics, dateFilterStart, dateFilterEnd, unitFilter])
   
   // Log when showRecentResults changes
   useEffect(() => {
@@ -391,6 +425,7 @@ export default function Home() {
           buildingId: selectedBuildingId,
           buildingName: selectedBuilding.name,
           context: context.trim() || undefined,
+          country: country,
         }),
       })
       
@@ -416,14 +451,7 @@ export default function Home() {
       setActiveTab('analysis')
       
       // Refresh recent results
-      fetch('/api/diagnostic/recent')
-        .then(res => res.json())
-        .then(data => {
-          if (data.results) {
-            setRecentResults(data.results)
-          }
-        })
-        .catch(err => console.error('Error refreshing recent results:', err))
+      loadRecentDiagnostics()
     } catch (error) {
       console.error('Error analyzing diagnostic:', error)
       alert(`Error: ${error instanceof Error ? error.message : 'Failed to analyze diagnostic'}`)
@@ -596,9 +624,79 @@ export default function Home() {
           {/* Recent Results View - Show first if selected */}
           {showRecentResults && !diagnosticResult && (
             <div className="mb-6">
-              <h1 className="text-3xl font-bold mb-4 text-gray-900">Recent Diagnostics (Last 7 Days)</h1>
+              <h1 className="text-3xl font-bold mb-6 text-gray-900">Recent Diagnostics</h1>
+              
+              {/* Filter Controls */}
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* My Diagnostics Toggle */}
+                  <div className="flex items-center">
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={showMyDiagnostics}
+                        onChange={(e) => setShowMyDiagnostics(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-sm font-medium text-gray-700">My Diagnostics</span>
+                    </label>
+                  </div>
+                  
+                  {/* Start Date Filter */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={dateFilterStart}
+                      onChange={(e) => setDateFilterStart(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  
+                  {/* End Date Filter */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={dateFilterEnd}
+                      onChange={(e) => setDateFilterEnd(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  
+                  {/* Unit Name Filter */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Unit Name</label>
+                    <input
+                      type="text"
+                      value={unitFilter}
+                      onChange={(e) => setUnitFilter(e.target.value)}
+                      placeholder="Search by unit name..."
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                
+                {/* Clear Filters Button */}
+                {(showMyDiagnostics || dateFilterStart || dateFilterEnd || unitFilter) && (
+                  <div className="mt-4">
+                    <button
+                      onClick={() => {
+                        setShowMyDiagnostics(false)
+                        setDateFilterStart('')
+                        setDateFilterEnd('')
+                        setUnitFilter('')
+                      }}
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      Clear Filters
+                    </button>
+                  </div>
+                )}
+              </div>
+              
               <div className="mb-4 text-sm text-gray-600">
-                Found {recentResults.length} recent diagnostic{recentResults.length !== 1 ? 's' : ''}
+                Found {recentResults.length} diagnostic{recentResults.length !== 1 ? 's' : ''} for {COUNTRIES.find(c => c.code === country)?.name}
               </div>
               {recentResults.length === 0 ? (
                 <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 text-center text-gray-500">
@@ -634,15 +732,65 @@ export default function Home() {
                           <div className="flex-1">
                             <h3 className="font-semibold text-gray-900 text-lg mb-1">{result.unitName}</h3>
                             <p className="text-sm text-gray-600 mb-2">{result.buildingName}</p>
-                            <div className="flex gap-4 text-xs text-gray-500">
-                              <span>{result.visitReports?.length || 0} visits</span>
-                              <span>{result.breakdowns?.length || 0} breakdowns</span>
-                              {result.analysis && (
-                                <span className="text-green-600">✓ Analysis available</span>
+                            <div className="flex flex-wrap gap-6 text-xs text-gray-500 items-center">
+                              {/* Visits */}
+                              {result.visitReports && result.visitReports.length > 0 && (
+                                <span className="flex items-center gap-1.5">
+                                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-500">
+                                    <path fillRule="evenodd" clipRule="evenodd" d="M14.15 0C14.509 0 14.8 0.291015 14.8 0.65L14.799 1.5H16.65C18.1136 1.5 19.3 2.68645 19.3 4.15V17.15C19.3 18.6136 18.1136 19.8 16.65 19.8H2.65C1.18645 19.8 0 18.6136 0 17.15V4.15C0 2.68645 1.18645 1.5 2.65 1.5H4.5V0.65C4.5 0.291015 4.79102 0 5.15 0C5.50899 0 5.8 0.291015 5.8 0.65V1.5H13.5V0.65C13.5 0.291015 13.791 0 14.15 0ZM18 7.299H1.3V17.15C1.3 17.8956 1.90442 18.5 2.65 18.5H16.65C17.3956 18.5 18 17.8956 18 17.15V7.299ZM6.15 14C6.50899 14 6.8 14.291 6.8 14.65C6.8 15.009 6.50899 15.3 6.15 15.3H4.65C4.29102 15.3 4 15.009 4 14.65C4 14.291 4.29102 14 4.65 14H6.15ZM10.4 14C10.759 14 11.05 14.291 11.05 14.65C11.05 15.009 10.759 15.3 10.4 15.3H8.9C8.54101 15.3 8.25 15.009 8.25 14.65C8.25 14.291 8.54101 14 8.9 14H10.4ZM14.65 14C15.009 14 15.3 14.291 15.3 14.65C15.3 15.009 15.009 15.3 14.65 15.3H13.15C12.791 15.3 12.5 15.009 12.5 14.65C12.5 14.291 12.791 14 13.15 14H14.65ZM10.4 10C10.759 10 11.05 10.291 11.05 10.65C11.05 11.009 10.759 11.3 10.4 11.3H8.9C8.54101 11.3 8.25 11.009 8.25 10.65C8.25 10.291 8.54101 10 8.9 10H10.4ZM6.15 10C6.50899 10 6.8 10.291 6.8 10.65C6.8 11.009 6.50899 11.3 6.15 11.3H4.65C4.29102 11.3 4 11.009 4 10.65C4 10.291 4.29102 10 4.65 10H6.15ZM14.65 10C15.009 10 15.3 10.291 15.3 10.65C15.3 11.009 15.009 11.3 14.65 11.3H13.15C12.791 11.3 12.5 11.009 12.5 10.65C12.5 10.291 12.791 10 13.15 10H14.65ZM4.5 2.8H2.65C1.90442 2.8 1.3 3.40442 1.3 4.15V5.999H18V4.15C18 3.40442 17.3956 2.8 16.65 2.8H14.799L14.8 3.65C14.8 4.00899 14.509 4.3 14.15 4.3C13.791 4.3 13.5 4.00899 13.5 3.65V2.8H5.8V3.65C5.8 4.00899 5.50899 4.3 5.15 4.3C4.79102 4.3 4.5 4.00899 4.5 3.65V2.8Z" fill="currentColor"/>
+                                  </svg>
+                                  <span>{result.visitReports.length} visit{result.visitReports.length !== 1 ? 's' : ''}</span>
+                                </span>
+                              )}
+                              
+                              {/* Breakdowns */}
+                              {result.breakdowns && result.breakdowns.length > 0 && (
+                                <span className="flex items-center gap-1.5">
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-500">
+                                    <path fillRule="evenodd" clipRule="evenodd" d="M11.1898 5C13.3145 5 15.2071 6.34269 15.909 8.34799L16.8257 10.9666L19.3295 11.2309C21.4162 11.4511 23 13.2109 23 15.3091V17C23 18.1046 22.1046 19 21 19L20.6105 19.0005C20.3707 20.5023 19.0694 21.65 17.5 21.65C15.9303 21.65 14.6287 20.5018 14.3894 18.9995H9.61062C9.37128 20.5018 8.06973 21.65 6.5 21.65C4.93062 21.65 3.62929 20.5023 3.38954 19.0005L3 19C1.89543 19 1 18.1046 1 17V7.5C1 6.11929 2.11929 5 3.5 5H11.1898ZM6.5 16.65C5.47827 16.65 4.65 17.4783 4.65 18.5C4.65 19.5217 5.47827 20.35 6.5 20.35C7.52173 20.35 8.35 19.5217 8.35 18.5C8.35 17.4783 7.52173 16.65 6.5 16.65ZM17.5 16.65C16.4783 16.65 15.65 17.4783 15.65 18.5C15.65 19.5217 16.4783 20.35 17.5 20.35C18.5217 20.35 19.35 19.5217 19.35 18.5C19.35 17.4783 18.5217 16.65 17.5 16.65ZM8.772 6.3H3.5C2.83726 6.3 2.3 6.83726 2.3 7.5V17C2.3 17.3866 2.6134 17.7 3 17.7L3.4525 17.6999C3.80654 16.3477 5.03676 15.35 6.5 15.35C7.96324 15.35 9.19345 16.3477 9.54749 17.6999H14.4525C14.8065 16.3477 16.0368 15.35 17.5 15.35C18.9632 15.35 20.1935 16.3477 20.5475 17.6999L21 17.7C21.3866 17.7 21.7 17.3866 21.7 17V15.3091L21.694 15.15H20C19.6737 15.15 19.4035 14.9095 19.357 14.5961L19.35 14.5C19.35 14.141 19.641 13.85 20 13.85L21.2902 13.8501C20.8491 13.1283 20.089 12.6183 19.1931 12.5237L15.8707 12.173L15.863 12.153L10.3078 11.7645C9.49422 11.7075 8.85253 11.0674 8.77985 10.2698L8.77299 10.1185L8.772 6.3ZM11.1898 6.3H10.072L10.073 10.1185C10.073 10.2761 10.1775 10.4106 10.3228 10.4539L10.3986 10.4676L15.396 10.817L14.682 8.77751C14.1626 7.29359 12.7621 6.3 11.1898 6.3ZM8.25 2.5C8.94036 2.5 9.5 3.05964 9.5 3.75V4.16667H7V3.75C7 3.05964 7.55964 2.5 8.25 2.5Z" fill="currentColor"/>
+                                  </svg>
+                                  <span>{result.breakdowns.length} breakdown{result.breakdowns.length !== 1 ? 's' : ''}</span>
+                                </span>
+                              )}
+                              
+                              {/* Repair Requests */}
+                              {result.repairRequests && result.repairRequests.length > 0 && (() => {
+                                // Count unique repair requests (deduplicate by repairRequestNumber)
+                                // The query returns one row per item, so we need to count unique repair requests
+                                const uniqueRepairRequests = new Set(
+                                  result.repairRequests
+                                    .map((rr: any) => rr.repairRequestNumber)
+                                    .filter((num: string) => num) // Filter out empty/null numbers
+                                )
+                                const uniqueCount = uniqueRepairRequests.size
+                                return uniqueCount > 0 ? (
+                                  <span className="flex items-center gap-1.5">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-500">
+                                      <path fillRule="evenodd" clipRule="evenodd" d="M15.8448 2.35001C16.7222 2.35001 17.5732 2.54526 18.3484 2.91629L19.1768 3.31283L15.3995 7.08966L16.9103 8.60053L20.6872 4.82315L21.0837 5.65161C21.4547 6.42677 21.65 7.27777 21.65 8.1552C21.65 11.3613 19.0509 13.9604 15.8448 13.9604C15.4622 13.9604 15.0842 13.9233 14.7147 13.8503L7.85983 20.7047C6.59938 21.9651 4.55577 21.9651 3.29532 20.7047C2.03486 19.4442 2.03486 17.4006 3.2953 16.1402L10.1496 9.28525L10.1017 9.0066C10.0605 8.72647 10.0396 8.44212 10.0396 8.1552C10.0396 4.94908 12.6387 2.35001 15.8448 2.35001ZM15.8448 3.65001C13.3566 3.65001 11.3396 5.66705 11.3396 8.1552C11.3396 8.55382 11.3912 8.94501 11.492 9.32217L11.5889 9.68445L4.21456 17.0594C3.46178 17.8122 3.46178 19.0327 4.21456 19.7854C4.96733 20.5382 6.18782 20.5382 6.94061 19.7854L14.3155 12.4111L14.6778 12.508C15.055 12.6088 15.4462 12.6604 15.8448 12.6604C18.3329 12.6604 20.35 10.6433 20.35 8.1552C20.35 7.80192 20.3094 7.45475 20.2303 7.11866L16.9104 10.4391L13.5609 7.08959L16.8813 3.76966C16.5452 3.69058 16.1981 3.65001 15.8448 3.65001ZM5.74998 17.5C6.16419 17.5 6.49998 17.8358 6.49998 18.25C6.49998 18.6642 6.16419 19 5.74998 19C5.33576 19 4.99998 18.6642 4.99998 18.25C4.99998 17.8358 5.33576 17.5 5.74998 17.5Z" fill="currentColor"/>
+                                    </svg>
+                                    <span>{uniqueCount} repair request{uniqueCount !== 1 ? 's' : ''}</span>
+                                  </span>
+                                ) : null
+                              })()}
+                              
+                              {/* Parts Replaced */}
+                              {result.analysis?.partsReplaced && result.analysis.partsReplaced.length > 0 && (
+                                <span className="flex items-center gap-1.5">
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-500">
+                                    <path fillRule="evenodd" clipRule="evenodd" d="M15.2999 2.9218L16.0323 3.22518C16.8495 3.56367 17.2544 4.48633 16.9504 5.31666L16.4572 6.6653C16.7687 6.92547 17.0561 7.21211 17.3166 7.52183L18.6673 7.0287C19.4973 6.72533 20.419 7.12978 20.7577 7.94601L21.0609 8.6765C21.4002 9.49427 21.0336 10.4341 20.2303 10.8061L18.9262 11.4103C18.9601 11.8051 18.9602 12.2025 18.9259 12.5984L20.2339 13.2058C21.0364 13.578 21.4026 14.5168 21.0641 15.334L20.7621 16.063C20.4236 16.8802 19.5008 17.2851 18.6704 16.9809L17.3123 16.4839C17.0575 16.7859 16.7777 17.0649 16.4761 17.3184L16.9731 18.6728C17.2781 19.504 16.8727 20.4278 16.0545 20.7661L15.3236 21.0682C14.9565 21.22 14.5534 21.2332 14.1478 21.1L14.0064 21.0437C13.652 20.8816 13.3642 20.599 13.1969 20.2388L12.5868 18.9265C12.1937 18.9601 11.798 18.9601 11.4038 18.9261L10.7964 20.235C10.4241 21.0374 9.48536 21.4035 8.66817 21.065L7.93575 20.7616C7.11856 20.4232 6.71365 19.5005 7.01767 18.6702L7.51457 17.3111C7.21691 17.0598 6.94159 16.7842 6.69105 16.4873L5.32772 16.9851C4.4977 17.2884 3.57604 16.884 3.23732 16.0678L2.93418 15.3373C2.59482 14.5195 2.96138 13.5797 3.76463 13.2077L5.07467 12.6005C5.04022 12.2067 5.03949 11.8103 5.07293 11.4153L3.76109 10.8062C2.95862 10.434 2.59244 9.49517 2.93095 8.67792L3.2329 7.94896C3.57142 7.13171 4.49418 6.72681 5.32462 7.03099L6.67887 7.52657C6.93319 7.22391 7.21257 6.94423 7.51388 6.69006L7.01926 5.34183C6.71425 4.51065 7.11962 3.58688 7.93783 3.24859L8.66872 2.94641C9.48539 2.60876 10.4231 2.97448 10.7955 3.77593L11.399 5.07475C11.6881 5.04943 11.9788 5.04229 12.2692 5.05352L12.5595 5.07087L13.1717 3.75177C13.544 2.94941 14.4827 2.58331 15.2999 2.9218ZM14.3509 4.29898L13.3353 6.48733L12.8526 6.41324C12.274 6.3244 11.6872 6.32714 11.1117 6.41939L10.6264 6.49716L9.61655 4.32373C9.53756 4.15373 9.33865 4.07615 9.16542 4.14777L8.43453 4.44996C8.26097 4.52172 8.17498 4.71767 8.2397 4.89403L9.06596 7.14625L8.6693 7.43501C8.19286 7.78185 7.77326 8.20129 7.426 8.68077L7.13772 9.0788L4.87768 8.25174C4.70149 8.1872 4.50575 8.27309 4.43394 8.44645L4.132 9.17541C4.06019 9.34877 4.13787 9.54791 4.30832 9.62697L6.4929 10.6413L6.4166 11.1255C6.32432 11.7112 6.32594 12.3055 6.41935 12.8883L6.4972 13.3741L4.31109 14.3872C4.14067 14.4662 4.06291 14.6655 4.1349 14.839L4.43804 15.5695C4.50989 15.7426 4.70539 15.8284 4.88168 15.764L7.14788 14.9366L7.4362 15.3324C7.7801 15.8044 8.19528 16.2206 8.66954 16.5659L9.06572 16.8543L8.23852 19.1169C8.17401 19.2931 8.2599 19.4888 8.43324 19.5606L9.16566 19.864C9.33901 19.9358 9.53813 19.8581 9.61712 19.6879L10.6303 17.5045L11.1155 17.5818C11.7002 17.675 12.2937 17.6746 12.8759 17.5826L13.3601 17.5061L14.3758 19.6909C14.4115 19.7679 14.4717 19.827 14.513 19.8471L14.5851 19.8764C14.6641 19.9021 14.7484 19.8993 14.8269 19.8669L15.5578 19.5647C15.7313 19.4929 15.8173 19.297 15.7526 19.1207L14.9232 16.8604L15.3213 16.5718C15.7984 16.226 16.2187 15.8075 16.5669 15.329L16.8554 14.9324L19.1174 15.7602C19.2935 15.8247 19.4893 15.7388 19.5611 15.5655L19.863 14.8365C19.9348 14.6632 19.8572 14.464 19.6867 14.385L17.504 13.3715L17.5815 12.8863C17.6752 12.2999 17.6747 11.7048 17.5821 11.121L17.5052 10.6359L19.6839 9.62652C19.8544 9.5476 19.9321 9.34824 19.8601 9.17478L19.557 8.44428C19.4851 8.27114 19.2896 8.18535 19.1134 8.24978L16.8581 9.07317L16.5699 8.67612C16.2185 8.19191 15.7923 7.76623 15.3043 7.41524L14.904 7.12736L15.7295 4.86992C15.7941 4.69374 15.7082 4.49802 15.5348 4.42622L14.8024 4.12284C14.6291 4.05104 14.4299 4.1287 14.3509 4.29898ZM13.3968 8.62786C15.2592 9.39929 16.1436 11.5344 15.3721 13.3968C14.6007 15.2592 12.4656 16.1436 10.6032 15.3722C8.74079 14.6007 7.85639 12.4656 8.62782 10.6032C9.39925 8.74083 11.5344 7.85643 13.3968 8.62786ZM9.82886 11.1007C9.33219 12.2998 9.9016 13.6745 11.1007 14.1711C12.2997 14.6678 13.6744 14.0984 14.1711 12.8993C14.6678 11.7002 14.0984 10.3256 12.8993 9.8289C11.7002 9.33223 10.3255 9.90164 9.82886 11.1007Z" fill="currentColor"/>
+                                  </svg>
+                                  <span>{result.analysis.partsReplaced.length} part{result.analysis.partsReplaced.length !== 1 ? 's' : ''} replaced</span>
+                                </span>
                               )}
                             </div>
                             <p className="text-xs text-gray-400 mt-2">
-                              Generated: {new Date(result.generatedAt).toLocaleString()}
+                              {(() => {
+                                const date = new Date(result.generatedAt)
+                                const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                                const timeStr = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                                const userName = result.userName || 'Unknown'
+                                return `${dateStr}, ${timeStr}, by ${userName}`
+                              })()}
                             </p>
                           </div>
                           <div className="ml-4">
@@ -837,14 +985,19 @@ export default function Home() {
       
                   {isLoading && (
                     <div className="mt-8 flex flex-col items-center justify-center">
-                      <div className="mb-4">
-                        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" className="animate-spin">
-                          <path d="M16.5 8.35C25.4194 8.35 32.65 15.5806 32.65 24.5C32.65 26.7172 32.2032 28.8301 31.3947 30.7535C34.6231 33.0752 39.3247 36.4561 45.4979 40.8951C46.8431 41.8624 47.1494 43.737 46.1821 45.0822L46.1649 45.106L45.4953 46.0182C44.5216 47.3445 42.6613 47.6392 41.3254 46.6786C35.1678 42.2507 30.4745 38.8759 27.2456 36.554C24.392 39.1022 20.6267 40.65 16.5 40.65C7.5806 40.65 0.35 33.4194 0.35 24.5C0.35 15.5806 7.5806 8.35 16.5 8.35ZM33.3651 33.7719L30.687 37.4275C33.6332 39.546 37.4323 42.2779 42.0844 45.6231C42.8414 46.1675 43.8956 46.0005 44.4473 45.2489L45.1169 44.3368C45.1218 44.33 45.1218 44.33 45.1267 44.3233C45.6748 43.561 45.5012 42.4987 44.7389 41.9506C40.1042 38.6178 36.3129 35.8916 33.3651 33.7719ZM16.5 9.65C8.29857 9.65 1.65 16.2986 1.65 24.5C1.65 32.7014 8.29857 39.35 16.5 39.35C24.7014 39.35 31.35 32.7014 31.35 24.5C31.35 16.2986 24.7014 9.65 16.5 9.65ZM16.5 10.85C24.0387 10.85 30.15 16.9613 30.15 24.5C30.15 32.0387 24.0387 38.15 16.5 38.15C8.96131 38.15 2.85 32.0387 2.85 24.5C2.85 16.9613 8.96131 10.85 16.5 10.85ZM16.5 12.15C9.67928 12.15 4.15 17.6793 4.15 24.5C4.15 31.3207 9.67928 36.85 16.5 36.85C23.3207 36.85 28.85 31.3207 28.85 24.5C28.85 17.6793 23.3207 12.15 16.5 12.15ZM30.8303 31.9491L30.7362 32.1326C30.0478 33.4137 29.1916 34.5913 28.1969 35.6358C28.6451 35.9591 29.1239 36.3035 29.6322 36.669L32.3087 33.0122C31.7851 32.6357 31.2923 32.2813 30.8303 31.9491ZM20.6526 30.4252C20.7564 30.7689 20.562 31.1316 20.2183 31.2355C18.8247 31.6565 17.4281 31.8675 16.0304 31.8675C14.6326 31.8675 13.236 31.6565 11.8424 31.2355C11.4987 31.1316 11.3043 30.7689 11.4081 30.4252C11.512 30.0816 11.8747 29.8872 12.2183 29.991C13.4914 30.3756 14.7614 30.5675 16.0304 30.5675C17.2993 30.5675 18.5693 30.3756 19.8424 29.991C20.186 29.8872 20.5487 30.0816 20.6526 30.4252ZM11.8599 20.5739C13.7155 21.3615 14.5812 23.5043 13.7936 25.3599C13.0059 27.2155 10.8631 28.0812 9.00754 27.2936C7.15195 26.5059 6.28621 24.3631 7.07387 22.5075C7.86152 20.652 10.0043 19.7862 11.8599 20.5739ZM23.9965 19.988C25.7244 21.0262 26.2835 23.2686 25.2453 24.9965C24.207 26.7244 21.9646 27.2835 20.2367 26.2453C18.5088 25.207 17.9497 22.9646 18.988 21.2367C20.0262 19.5088 22.2686 18.9497 23.9965 19.988ZM8.27052 23.0155C7.7634 24.2102 8.3208 25.5898 9.51549 26.0969C10.7102 26.604 12.0898 26.0466 12.5969 24.8519C13.104 23.6572 12.5466 22.2776 11.3519 21.7705C10.1572 21.2634 8.77764 21.8208 8.27052 23.0155ZM20.1023 21.9063C19.4338 23.0188 19.7938 24.4625 20.9063 25.131C22.0188 25.7994 23.4625 25.4394 24.131 24.327C24.7994 23.2145 24.4394 21.7707 23.327 21.1023C22.2145 20.4338 20.7707 20.7938 20.1023 21.9063ZM10.4215 22.299C10.8028 22.4608 10.9807 22.9011 10.8188 23.2824C10.657 23.6637 10.2167 23.8416 9.83538 23.6797C9.45409 23.5179 9.2762 23.0776 9.43805 22.6963C9.5999 22.315 10.0402 22.1371 10.4215 22.299ZM22.332 21.4961C22.6871 21.7094 22.8019 22.1702 22.5886 22.5252C22.3753 22.8803 21.9145 22.9952 21.5595 22.7818C21.2044 22.5685 21.0895 22.1077 21.3029 21.7527C21.5162 21.3976 21.977 21.2828 22.332 21.4961ZM3.15 5C3.50899 5 3.8 5.29102 3.8 5.65L3.799 7.5H5.65C6.00899 7.5 6.3 7.79101 6.3 8.15C6.3 8.50898 6.00899 8.8 5.65 8.8H3.799L3.8 10.65C3.8 11.009 3.50899 11.3 3.15 11.3C2.79101 11.3 2.5 11.009 2.5 10.65L2.499 8.8H0.65C0.291015 8.8 0 8.50898 0 8.15C0 7.79101 0.291015 7.5 0.65 7.5H2.499L2.5 5.65C2.5 5.29102 2.79101 5 3.15 5ZM23.75 6C24.1642 6 24.5 6.33579 24.5 6.75C24.5 7.16421 24.1642 7.5 23.75 7.5C23.3358 7.5 23 7.16421 23 6.75C23 6.33579 23.3358 6 23.75 6ZM17.65 0C18.009 0 18.3 0.291015 18.3 0.65L18.299 2H19.65C20.009 2 20.3 2.29101 20.3 2.65C20.3 3.00899 20.009 3.3 19.65 3.3L18.299 3.299L18.3 4.65C18.3 5.00899 18.009 5.3 17.65 5.3C17.291 5.3 17 5.00899 17 4.65L16.999 3.299L15.65 3.3C15.291 3.3 15 3.00899 15 2.65C15 2.29101 15.291 2 15.65 2H16.999L17 0.65C17 0.291015 17.291 0 17.65 0ZM9 1C9.55229 1 10 1.44772 10 2C10 2.55228 9.55229 3 9 3C8.44771 3 8 2.55228 8 2C8 1.44772 8.44771 1 9 1Z" fill="black"/>
-                        </svg>
+                      <div className="w-full max-w-md mb-6">
+                        <div className="bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                          <div 
+                            className="bg-blue-600 h-2.5 rounded-full"
+                            style={{
+                              animation: 'progress 20s linear forwards',
+                            }}
+                          />
+                        </div>
                       </div>
                       <p className="text-gray-600 font-medium">Inspecting the unit, please wait...</p>
                       <p className="text-sm text-gray-500 mt-2">This may take up to 20 seconds</p>
-        </div>
+                    </div>
                   )}
                 </>
               )}
@@ -912,6 +1065,64 @@ export default function Home() {
                 </p>
               </div>
             </div>
+            
+            {/* Summary Stats */}
+            {(() => {
+              // Calculate unique repair requests count
+              const uniqueRepairRequests = diagnosticResult.repairRequests && diagnosticResult.repairRequests.length > 0
+                ? new Set(
+                    diagnosticResult.repairRequests
+                      .map((rr: any) => rr.repairRequestNumber)
+                      .filter((num: string) => num)
+                  ).size
+                : 0
+              
+              return (
+                <div className="mb-6 pb-4 border-b border-gray-200">
+                  <div className="flex flex-wrap gap-6 text-sm text-gray-600 items-center">
+                    {/* Visits */}
+                    {diagnosticResult.visitReports && diagnosticResult.visitReports.length > 0 && (
+                      <span className="flex items-center gap-1.5">
+                        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-500">
+                          <path fillRule="evenodd" clipRule="evenodd" d="M14.15 0C14.509 0 14.8 0.291015 14.8 0.65L14.799 1.5H16.65C18.1136 1.5 19.3 2.68645 19.3 4.15V17.15C19.3 18.6136 18.1136 19.8 16.65 19.8H2.65C1.18645 19.8 0 18.6136 0 17.15V4.15C0 2.68645 1.18645 1.5 2.65 1.5H4.5V0.65C4.5 0.291015 4.79102 0 5.15 0C5.50899 0 5.8 0.291015 5.8 0.65V1.5H13.5V0.65C13.5 0.291015 13.791 0 14.15 0ZM18 7.299H1.3V17.15C1.3 17.8956 1.90442 18.5 2.65 18.5H16.65C17.3956 18.5 18 17.8956 18 17.15V7.299ZM6.15 14C6.50899 14 6.8 14.291 6.8 14.65C6.8 15.009 6.50899 15.3 6.15 15.3H4.65C4.29102 15.3 4 15.009 4 14.65C4 14.291 4.29102 14 4.65 14H6.15ZM10.4 14C10.759 14 11.05 14.291 11.05 14.65C11.05 15.009 10.759 15.3 10.4 15.3H8.9C8.54101 15.3 8.25 15.009 8.25 14.65C8.25 14.291 8.54101 14 8.9 14H10.4ZM14.65 14C15.009 14 15.3 14.291 15.3 14.65C15.3 15.009 15.009 15.3 14.65 15.3H13.15C12.791 15.3 12.5 15.009 12.5 14.65C12.5 14.291 12.791 14 13.15 14H14.65ZM10.4 10C10.759 10 11.05 10.291 11.05 10.65C11.05 11.009 10.759 11.3 10.4 11.3H8.9C8.54101 11.3 8.25 11.009 8.25 10.65C8.25 10.291 8.54101 10 8.9 10H10.4ZM6.15 10C6.50899 10 6.8 10.291 6.8 10.65C6.8 11.009 6.50899 11.3 6.15 11.3H4.65C4.29102 11.3 4 11.009 4 10.65C4 10.291 4.29102 10 4.65 10H6.15ZM14.65 10C15.009 10 15.3 10.291 15.3 10.65C15.3 11.009 15.009 11.3 14.65 11.3H13.15C12.791 11.3 12.5 11.009 12.5 10.65C12.5 10.291 12.791 10 13.15 10H14.65ZM4.5 2.8H2.65C1.90442 2.8 1.3 3.40442 1.3 4.15V5.999H18V4.15C18 3.40442 17.3956 2.8 16.65 2.8H14.799L14.8 3.65C14.8 4.00899 14.509 4.3 14.15 4.3C13.791 4.3 13.5 4.00899 13.5 3.65V2.8H5.8V3.65C5.8 4.00899 5.50899 4.3 5.15 4.3C4.79102 4.3 4.5 4.00899 4.5 3.65V2.8Z" fill="currentColor"/>
+                        </svg>
+                        <span className="font-medium">{diagnosticResult.visitReports.length} visit{diagnosticResult.visitReports.length !== 1 ? 's' : ''}</span>
+                      </span>
+                    )}
+                    
+                    {/* Breakdowns */}
+                    {diagnosticResult.breakdowns && diagnosticResult.breakdowns.length > 0 && (
+                      <span className="flex items-center gap-1.5">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-500">
+                          <path fillRule="evenodd" clipRule="evenodd" d="M11.1898 5C13.3145 5 15.2071 6.34269 15.909 8.34799L16.8257 10.9666L19.3295 11.2309C21.4162 11.4511 23 13.2109 23 15.3091V17C23 18.1046 22.1046 19 21 19L20.6105 19.0005C20.3707 20.5023 19.0694 21.65 17.5 21.65C15.9303 21.65 14.6287 20.5018 14.3894 18.9995H9.61062C9.37128 20.5018 8.06973 21.65 6.5 21.65C4.93062 21.65 3.62929 20.5023 3.38954 19.0005L3 19C1.89543 19 1 18.1046 1 17V7.5C1 6.11929 2.11929 5 3.5 5H11.1898ZM6.5 16.65C5.47827 16.65 4.65 17.4783 4.65 18.5C4.65 19.5217 5.47827 20.35 6.5 20.35C7.52173 20.35 8.35 19.5217 8.35 18.5C8.35 17.4783 7.52173 16.65 6.5 16.65ZM17.5 16.65C16.4783 16.65 15.65 17.4783 15.65 18.5C15.65 19.5217 16.4783 20.35 17.5 20.35C18.5217 20.35 19.35 19.5217 19.35 18.5C19.35 17.4783 18.5217 16.65 17.5 16.65ZM8.772 6.3H3.5C2.83726 6.3 2.3 6.83726 2.3 7.5V17C2.3 17.3866 2.6134 17.7 3 17.7L3.4525 17.6999C3.80654 16.3477 5.03676 15.35 6.5 15.35C7.96324 15.35 9.19345 16.3477 9.54749 17.6999H14.4525C14.8065 16.3477 16.0368 15.35 17.5 15.35C18.9632 15.35 20.1935 16.3477 20.5475 17.6999L21 17.7C21.3866 17.7 21.7 17.3866 21.7 17V15.3091L21.694 15.15H20C19.6737 15.15 19.4035 14.9095 19.357 14.5961L19.35 14.5C19.35 14.141 19.641 13.85 20 13.85L21.2902 13.8501C20.8491 13.1283 20.089 12.6183 19.1931 12.5237L15.8707 12.173L15.863 12.153L10.3078 11.7645C9.49422 11.7075 8.85253 11.0674 8.77985 10.2698L8.77299 10.1185L8.772 6.3ZM11.1898 6.3H10.072L10.073 10.1185C10.073 10.2761 10.1775 10.4106 10.3228 10.4539L10.3986 10.4676L15.396 10.817L14.682 8.77751C14.1626 7.29359 12.7621 6.3 11.1898 6.3ZM8.25 2.5C8.94036 2.5 9.5 3.05964 9.5 3.75V4.16667H7V3.75C7 3.05964 7.55964 2.5 8.25 2.5Z" fill="currentColor"/>
+                        </svg>
+                        <span className="font-medium">{diagnosticResult.breakdowns.length} breakdown{diagnosticResult.breakdowns.length !== 1 ? 's' : ''}</span>
+                      </span>
+                    )}
+                    
+                    {/* Repair Requests */}
+                    {uniqueRepairRequests > 0 && (
+                      <span className="flex items-center gap-1.5">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-500">
+                          <path fillRule="evenodd" clipRule="evenodd" d="M15.8448 2.35001C16.7222 2.35001 17.5732 2.54526 18.3484 2.91629L19.1768 3.31283L15.3995 7.08966L16.9103 8.60053L20.6872 4.82315L21.0837 5.65161C21.4547 6.42677 21.65 7.27777 21.65 8.1552C21.65 11.3613 19.0509 13.9604 15.8448 13.9604C15.4622 13.9604 15.0842 13.9233 14.7147 13.8503L7.85983 20.7047C6.59938 21.9651 4.55577 21.9651 3.29532 20.7047C2.03486 19.4442 2.03486 17.4006 3.2953 16.1402L10.1496 9.28525L10.1017 9.0066C10.0605 8.72647 10.0396 8.44212 10.0396 8.1552C10.0396 4.94908 12.6387 2.35001 15.8448 2.35001ZM15.8448 3.65001C13.3566 3.65001 11.3396 5.66705 11.3396 8.1552C11.3396 8.55382 11.3912 8.94501 11.492 9.32217L11.5889 9.68445L4.21456 17.0594C3.46178 17.8122 3.46178 19.0327 4.21456 19.7854C4.96733 20.5382 6.18782 20.5382 6.94061 19.7854L14.3155 12.4111L14.6778 12.508C15.055 12.6088 15.4462 12.6604 15.8448 12.6604C18.3329 12.6604 20.35 10.6433 20.35 8.1552C20.35 7.80192 20.3094 7.45475 20.2303 7.11866L16.9104 10.4391L13.5609 7.08959L16.8813 3.76966C16.5452 3.69058 16.1981 3.65001 15.8448 3.65001ZM5.74998 17.5C6.16419 17.5 6.49998 17.8358 6.49998 18.25C6.49998 18.6642 6.16419 19 5.74998 19C5.33576 19 4.99998 18.6642 4.99998 18.25C4.99998 17.8358 5.33576 17.5 5.74998 17.5Z" fill="currentColor"/>
+                        </svg>
+                        <span className="font-medium">{uniqueRepairRequests} repair request{uniqueRepairRequests !== 1 ? 's' : ''}</span>
+                      </span>
+                    )}
+                    
+                    {/* Parts Replaced */}
+                    {diagnosticResult.analysis?.partsReplaced && diagnosticResult.analysis.partsReplaced.length > 0 && (
+                      <span className="flex items-center gap-1.5">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-500">
+                          <path fillRule="evenodd" clipRule="evenodd" d="M15.2999 2.9218L16.0323 3.22518C16.8495 3.56367 17.2544 4.48633 16.9504 5.31666L16.4572 6.6653C16.7687 6.92547 17.0561 7.21211 17.3166 7.52183L18.6673 7.0287C19.4973 6.72533 20.419 7.12978 20.7577 7.94601L21.0609 8.6765C21.4002 9.49427 21.0336 10.4341 20.2303 10.8061L18.9262 11.4103C18.9601 11.8051 18.9602 12.2025 18.9259 12.5984L20.2339 13.2058C21.0364 13.578 21.4026 14.5168 21.0641 15.334L20.7621 16.063C20.4236 16.8802 19.5008 17.2851 18.6704 16.9809L17.3123 16.4839C17.0575 16.7859 16.7777 17.0649 16.4761 17.3184L16.9731 18.6728C17.2781 19.504 16.8727 20.4278 16.0545 20.7661L15.3236 21.0682C14.9565 21.22 14.5534 21.2332 14.1478 21.1L14.0064 21.0437C13.652 20.8816 13.3642 20.599 13.1969 20.2388L12.5868 18.9265C12.1937 18.9601 11.798 18.9601 11.4038 18.9261L10.7964 20.235C10.4241 21.0374 9.48536 21.4035 8.66817 21.065L7.93575 20.7616C7.11856 20.4232 6.71365 19.5005 7.01767 18.6702L7.51457 17.3111C7.21691 17.0598 6.94159 16.7842 6.69105 16.4873L5.32772 16.9851C4.4977 17.2884 3.57604 16.884 3.23732 16.0678L2.93418 15.3373C2.59482 14.5195 2.96138 13.5797 3.76463 13.2077L5.07467 12.6005C5.04022 12.2067 5.03949 11.8103 5.07293 11.4153L3.76109 10.8062C2.95862 10.434 2.59244 9.49517 2.93095 8.67792L3.2329 7.94896C3.57142 7.13171 4.49418 6.72681 5.32462 7.03099L6.67887 7.52657C6.93319 7.22391 7.21257 6.94423 7.51388 6.69006L7.01926 5.34183C6.71425 4.51065 7.11962 3.58688 7.93783 3.24859L8.66872 2.94641C9.48539 2.60876 10.4231 2.97448 10.7955 3.77593L11.399 5.07475C11.6881 5.04943 11.9788 5.04229 12.2692 5.05352L12.5595 5.07087L13.1717 3.75177C13.544 2.94941 14.4827 2.58331 15.2999 2.9218ZM14.3509 4.29898L13.3353 6.48733L12.8526 6.41324C12.274 6.3244 11.6872 6.32714 11.1117 6.41939L10.6264 6.49716L9.61655 4.32373C9.53756 4.15373 9.33865 4.07615 9.16542 4.14777L8.43453 4.44996C8.26097 4.52172 8.17498 4.71767 8.2397 4.89403L9.06596 7.14625L8.6693 7.43501C8.19286 7.78185 7.77326 8.20129 7.426 8.68077L7.13772 9.0788L4.87768 8.25174C4.70149 8.1872 4.50575 8.27309 4.43394 8.44645L4.132 9.17541C4.06019 9.34877 4.13787 9.54791 4.30832 9.62697L6.4929 10.6413L6.4166 11.1255C6.32432 11.7112 6.32594 12.3055 6.41935 12.8883L6.4972 13.3741L4.31109 14.3872C4.14067 14.4662 4.06291 14.6655 4.1349 14.839L4.43804 15.5695C4.50989 15.7426 4.70539 15.8284 4.88168 15.764L7.14788 14.9366L7.4362 15.3324C7.7801 15.8044 8.19528 16.2206 8.66954 16.5659L9.06572 16.8543L8.23852 19.1169C8.17401 19.2931 8.2599 19.4888 8.43324 19.5606L9.16566 19.864C9.33901 19.9358 9.53813 19.8581 9.61712 19.6879L10.6303 17.5045L11.1155 17.5818C11.7002 17.675 12.2937 17.6746 12.8759 17.5826L13.3601 17.5061L14.3758 19.6909C14.4115 19.7679 14.4717 19.827 14.513 19.8471L14.5851 19.8764C14.6641 19.9021 14.7484 19.8993 14.8269 19.8669L15.5578 19.5647C15.7313 19.4929 15.8173 19.297 15.7526 19.1207L14.9232 16.8604L15.3213 16.5718C15.7984 16.226 16.2187 15.8075 16.5669 15.329L16.8554 14.9324L19.1174 15.7602C19.2935 15.8247 19.4893 15.7388 19.5611 15.5655L19.863 14.8365C19.9348 14.6632 19.8572 14.464 19.6867 14.385L17.504 13.3715L17.5815 12.8863C17.6752 12.2999 17.6747 11.7048 17.5821 11.121L17.5052 10.6359L19.6839 9.62652C19.8544 9.5476 19.9321 9.34824 19.8601 9.17478L19.557 8.44428C19.4851 8.27114 19.2896 8.18535 19.1134 8.24978L16.8581 9.07317L16.5699 8.67612C16.2185 8.19191 15.7923 7.76623 15.3043 7.41524L14.904 7.12736L15.7295 4.86992C15.7941 4.69374 15.7082 4.49802 15.5348 4.42622L14.8024 4.12284C14.6291 4.05104 14.4299 4.1287 14.3509 4.29898ZM13.3968 8.62786C15.2592 9.39929 16.1436 11.5344 15.3721 13.3968C14.6007 15.2592 12.4656 16.1436 10.6032 15.3722C8.74079 14.6007 7.85639 12.4656 8.62782 10.6032C9.39925 8.74083 11.5344 7.85643 13.3968 8.62786ZM9.82886 11.1007C9.33219 12.2998 9.9016 13.6745 11.1007 14.1711C12.2997 14.6678 13.6744 14.0984 14.1711 12.8993C14.6678 11.7002 14.0984 10.3256 12.8993 9.8289C11.7002 9.33223 10.3255 9.90164 9.82886 11.1007Z" fill="currentColor"/>
+                        </svg>
+                        <span className="font-medium">{diagnosticResult.analysis.partsReplaced.length} part{diagnosticResult.analysis.partsReplaced.length !== 1 ? 's' : ''} replaced</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
             
             {/* Tabs */}
             <div className="border-b border-gray-200 mb-6 flex justify-between items-center">

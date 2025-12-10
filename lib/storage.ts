@@ -116,6 +116,9 @@ export async function storeDiagnostic(metadata: {
   unitName: string
   buildingName: string
   generatedAt: Date
+  country: string
+  userId?: string
+  userName?: string
   visitReports: any[]
   breakdowns: any[]
   maintenanceIssues: any[]
@@ -128,6 +131,9 @@ export async function storeDiagnostic(metadata: {
       unitName: metadata.unitName,
       buildingName: metadata.buildingName,
       generatedAt: metadata.generatedAt,
+      country: metadata.country,
+      userId: metadata.userId ?? null,
+      userName: metadata.userName ?? null,
       visitReports: metadata.visitReports,
       breakdowns: metadata.breakdowns,
       maintenanceIssues: metadata.maintenanceIssues,
@@ -200,21 +206,63 @@ export function listStoredPDFs(): Array<{
 }
 
 /**
- * List all stored diagnostics from database
+ * List stored diagnostics from database with filters
  */
-export async function listStoredDiagnostics(): Promise<Array<{
+export async function listStoredDiagnostics(filters?: {
+  country?: string
+  userId?: string
+  startDate?: Date
+  endDate?: Date
+  unitId?: string
+  unitName?: string
+}): Promise<Array<{
   id: string
   unitId: string
   unitName: string
   buildingName: string
   generatedAt: Date
+  country: string
+  userId: string | null
+  userName: string | null
   visitReports: any[]
   breakdowns: any[]
   maintenanceIssues: any[]
   repairRequests?: any[]
   analysis: any
 }>> {
+  const where: any = {}
+  
+  if (filters?.country) {
+    where.country = filters.country
+  }
+  
+  if (filters?.userId) {
+    where.userId = filters.userId
+  }
+  
+  if (filters?.startDate || filters?.endDate) {
+    where.generatedAt = {}
+    if (filters.startDate) {
+      where.generatedAt.gte = filters.startDate
+    }
+    if (filters.endDate) {
+      where.generatedAt.lte = filters.endDate
+    }
+  }
+  
+  if (filters?.unitId) {
+    where.unitId = filters.unitId
+  }
+  
+  if (filters?.unitName) {
+    where.unitName = {
+      contains: filters.unitName,
+      mode: 'insensitive',
+    }
+  }
+  
   const diagnostics = await prisma.diagnostic.findMany({
+    where,
     orderBy: {
       generatedAt: 'desc',
     },
@@ -226,6 +274,9 @@ export async function listStoredDiagnostics(): Promise<Array<{
     unitName: d.unitName,
     buildingName: d.buildingName,
     generatedAt: d.generatedAt,
+    country: d.country,
+    userId: d.userId,
+    userName: d.userName,
     visitReports: d.visitReports as any[],
     breakdowns: d.breakdowns as any[],
     maintenanceIssues: d.maintenanceIssues as any[],

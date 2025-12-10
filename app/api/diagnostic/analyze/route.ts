@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/lib/auth'
 import { fetchVisitReports, fetchBreakdowns, fetchMaintenanceIssues, fetchRepairRequests } from '@/lib/looker'
 import { generateDiagnosticAnalysis, DiagnosticData } from '@/lib/llm-analysis'
 import { parseDaysFromContext } from '@/lib/date-parser'
@@ -30,7 +32,7 @@ export async function POST(request: NextRequest) {
     }
     
     const body = await request.json()
-    const { unitId, unitName, buildingId, buildingName, context } = body
+    const { unitId, unitName, buildingId, buildingName, context, country } = body
     
     if (!unitId || !unitName || !buildingId || !buildingName) {
       return NextResponse.json(
@@ -38,6 +40,11 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+    
+    // Get user session for tracking who generated the diagnostic
+    const session = await getServerSession(authOptions)
+    const userId = session?.user?.id || session?.user?.email || null
+    const userName = session?.user?.name || null
     
     // Parse date range from context (default: 90 days)
     const daysBack = parseDaysFromContext(context || '')
@@ -151,13 +158,16 @@ export async function POST(request: NextRequest) {
         unitName,
         buildingName,
         generatedAt: new Date(),
+        country: country || 'FR', // Default to FR if not provided
+        userId: userId || undefined,
+        userName: userName || undefined,
         visitReports,
         breakdowns,
         maintenanceIssues,
         repairRequests,
         analysis,
       })
-      console.log(`[API] Stored diagnostic for ${unitName}`)
+      console.log(`[API] Stored diagnostic for ${unitName} by ${userName || 'unknown user'}`)
     } catch (error) {
       console.error('[API] Error storing diagnostic:', error)
       // Don't fail the request if storage fails
