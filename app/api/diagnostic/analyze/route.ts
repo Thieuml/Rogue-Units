@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
     
     // Store diagnostic result for recent diagnostics
     try {
-      storeDiagnostic({
+      await storeDiagnostic({
         unitId,
         unitName,
         buildingName,

@@ -1,0 +1,32 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Diagnostic {
+  id              String   @id @default(cuid())
+  unitId          String
+  unitName        String
+  buildingName    String
+  generatedAt     DateTime @default(now())
+  
+  // Store full diagnostic data as JSON
+  visitReports    Json     @default("[]")
+  breakdowns      Json     @default("[]")
+  maintenanceIssues Json   @default("[]")
+  repairRequests  Json?
+  analysis        Json?
+  
+  // Indexes for faster queries
+  @@index([unitId])
+  @@index([generatedAt])
+  @@index([unitName])
+  @@index([buildingName])
+  @@map("diagnostics")
+}

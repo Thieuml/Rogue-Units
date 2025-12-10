@@ -3,10 +3,10 @@ import { listStoredDiagnostics } from '@/lib/storage'
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('[API] Fetching recent diagnostics...')
+    console.log('[API] Fetching recent diagnostics from database...')
     
     // Get all diagnostics from last 7 days
-    const allDiagnostics = listStoredDiagnostics()
+    const allDiagnostics = await listStoredDiagnostics()
     console.log('[API] Total stored diagnostics:', allDiagnostics.length)
     
     const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000)
@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
     console.log('[API] Recent diagnostics (last 7 days):', recentDiagnostics.length)
     recentDiagnostics.forEach((diag, idx) => {
       console.log(`[API] Diagnostic ${idx + 1}:`, {
+        id: diag.id,
         unitId: diag.unitId,
         unitName: diag.unitName,
         buildingName: diag.buildingName,

@@ -38,3 +38,5 @@ next-env.d.ts
 # generated PDFs (optional - remove if you want to commit them)
 /generated-pdfs/
 
+
+/lib/generated/prisma

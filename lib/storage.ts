@@ -1,9 +1,14 @@
 /**
  * Storage service for generated PDFs (30-day retention)
+ * Diagnostic results are now stored in PostgreSQL database
  */
 
 import fs from 'fs'
 import path from 'path'
+import { prisma } from './db'
+
+// Lazy import to avoid blocking server startup
+// Prisma client will only be initialized when actually used
 
 const STORAGE_DIR = path.join(process.cwd(), 'generated-pdfs')
 const RETENTION_DAYS = 30
@@ -104,9 +109,9 @@ export function cleanupExpiredPDFs(): void {
 }
 
 /**
- * Store diagnostic result (without PDF)
+ * Store diagnostic result in database (without PDF)
  */
-export function storeDiagnostic(metadata: {
+export async function storeDiagnostic(metadata: {
   unitId: string
   unitName: string
   buildingName: string
@@ -116,18 +121,22 @@ export function storeDiagnostic(metadata: {
   maintenanceIssues: any[]
   repairRequests?: any[]
   analysis: any
-}): string {
-  initStorage()
+}): Promise<string> {
+  const diagnostic = await prisma.diagnostic.create({
+    data: {
+      unitId: metadata.unitId,
+      unitName: metadata.unitName,
+      buildingName: metadata.buildingName,
+      generatedAt: metadata.generatedAt,
+      visitReports: metadata.visitReports,
+      breakdowns: metadata.breakdowns,
+      maintenanceIssues: metadata.maintenanceIssues,
+      repairRequests: metadata.repairRequests ?? undefined,
+      analysis: metadata.analysis ?? undefined,
+    },
+  })
   
-  const timestamp = new Date(metadata.generatedAt).toISOString().replace(/[:.]/g, '-').split('T')[0]
-  const sanitizedName = metadata.unitName.replace(/[^a-zA-Z0-9]/g, '_')
-  const filename = `diagnostic_${sanitizedName}_${metadata.unitId}_${timestamp}.json`
-  const storagePath = path.join(STORAGE_DIR, filename)
-  
-  // Store metadata with full diagnostic data
-  fs.writeFileSync(storagePath, JSON.stringify(metadata, null, 2))
-  
-  return storagePath
+  return diagnostic.id
 }
 
 /**
@@ -191,70 +200,61 @@ export function listStoredPDFs(): Array<{
 }
 
 /**
- * List all stored diagnostics (including non-PDF ones)
+ * List all stored diagnostics from database
  */
-export function listStoredDiagnostics(): Array<{
+export async function listStoredDiagnostics(): Promise<Array<{
+  id: string
   unitId: string
   unitName: string
   buildingName: string
   generatedAt: Date
-  daysRemaining: number
   visitReports: any[]
   breakdowns: any[]
   maintenanceIssues: any[]
   repairRequests?: any[]
   analysis: any
-}> {
-  if (!fs.existsSync(STORAGE_DIR)) {
-    return []
-  }
-  
-  const files = fs.readdirSync(STORAGE_DIR)
-  const diagnostics: Array<{
-    unitId: string
-    unitName: string
-    buildingName: string
-    generatedAt: Date
-    daysRemaining: number
-    visitReports: any[]
-    breakdowns: any[]
-    maintenanceIssues: any[]
-    repairRequests?: any[]
-    analysis: any
-  }> = []
-  
-  const now = Date.now()
-  
-  files.forEach((file) => {
-    if (file.endsWith('.json') && file.startsWith('diagnostic_')) {
-      const metadataPath = path.join(STORAGE_DIR, file)
-      
-      try {
-        const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'))
-        const generatedAt = new Date(metadata.generatedAt)
-        const daysSinceGeneration = (now - generatedAt.getTime()) / (1000 * 60 * 60 * 24)
-        const daysRemaining = Math.max(0, RETENTION_DAYS - daysSinceGeneration)
-        
-        if (daysRemaining > 0) {
-          diagnostics.push({
-            unitId: metadata.unitId,
-            unitName: metadata.unitName,
-            buildingName: metadata.buildingName,
-            generatedAt,
-            daysRemaining: Math.floor(daysRemaining),
-            visitReports: metadata.visitReports || [],
-            breakdowns: metadata.breakdowns || [],
-            maintenanceIssues: metadata.maintenanceIssues || [],
-            repairRequests: metadata.repairRequests || [],
-            analysis: metadata.analysis || null,
-          })
-        }
-      } catch (error) {
-        console.error(`Error reading diagnostic for ${file}:`, error)
-      }
-    }
+}>> {
+  const diagnostics = await prisma.diagnostic.findMany({
+    orderBy: {
+      generatedAt: 'desc',
+    },
   })
   
-  return diagnostics.sort((a, b) => b.generatedAt.getTime() - a.generatedAt.getTime())
+  return diagnostics.map(d => ({
+    id: d.id,
+    unitId: d.unitId,
+    unitName: d.unitName,
+    buildingName: d.buildingName,
+    generatedAt: d.generatedAt,
+    visitReports: d.visitReports as any[],
+    breakdowns: d.breakdowns as any[],
+    maintenanceIssues: d.maintenanceIssues as any[],
+    repairRequests: d.repairRequests as any[] | undefined,
+    analysis: d.analysis as any,
+  }))
+}
+
+/**
+ * Get diagnostic by ID
+ */
+export async function getDiagnosticById(id: string) {
+  const diagnostic = await prisma.diagnostic.findUnique({
+    where: { id },
+  })
+  
+  if (!diagnostic) return null
+  
+  return {
+    id: diagnostic.id,
+    unitId: diagnostic.unitId,
+    unitName: diagnostic.unitName,
+    buildingName: diagnostic.buildingName,
+    generatedAt: diagnostic.generatedAt,
+    visitReports: diagnostic.visitReports as any[],
+    breakdowns: diagnostic.breakdowns as any[],
+    maintenanceIssues: diagnostic.maintenanceIssues as any[],
+    repairRequests: diagnostic.repairRequests as any[] | undefined,
+    analysis: diagnostic.analysis as any,
+  }
 }
 
