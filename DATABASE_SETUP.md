@@ -131,3 +131,4 @@ The `Diagnostic` model stores:
 - Only new diagnostics will be stored in the database
 - The file system storage functions (`storePDF`, `getPDF`, etc.) are still available for PDF storage if needed
 
+

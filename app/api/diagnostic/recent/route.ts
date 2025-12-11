@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { listStoredDiagnostics } from '@/lib/storage'
+import { normalizeToV1 } from '@/lib/llm-analysis-adapter'
 
 export async function GET(request: NextRequest) {
   try {
@@ -67,6 +68,7 @@ export async function GET(request: NextRequest) {
     console.log('[API] Found diagnostics:', diagnostics.length)
     
     // Return diagnostics with user info
+    // Normalize analysis to V1 format for UI compatibility
     const results = diagnostics.map(diag => ({
       id: diag.id,
       unitId: diag.unitId,
@@ -79,7 +81,7 @@ export async function GET(request: NextRequest) {
       breakdowns: diag.breakdowns || [],
       maintenanceIssues: diag.maintenanceIssues || [],
       repairRequests: diag.repairRequests || [],
-      analysis: diag.analysis || null,
+      analysis: diag.analysis ? normalizeToV1(diag.analysis) : null,
       generatedAt: diag.generatedAt,
     }))
     

@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import useSWR from 'swr'
+import { useSession } from 'next-auth/react'
 import { WeMaintainLogo } from '@/components/WeMaintainLogo'
 import { UserMenu } from '@/components/UserMenu'
 import { translateStateKey, translateProblemKey } from '@/lib/state-key-translator'
@@ -168,7 +169,23 @@ function getDaysBack(context: string | undefined): number {
 }
 
 export default function Home() {
-  const [country, setCountry] = useState<string>('FR')
+  const { data: session } = useSession()
+  // Initialize country from localStorage or default to FR
+  const [country, setCountryState] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('diagnostic-country')
+      return saved || 'FR'
+    }
+    return 'FR'
+  })
+  
+  // Wrapper to persist country changes
+  const setCountry = (newCountry: string) => {
+    setCountryState(newCountry)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('diagnostic-country', newCountry)
+    }
+  }
   const [selectedBuildingId, setSelectedBuildingId] = useState<string>('')
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
   const [buildingSearch, setBuildingSearch] = useState<string>('')
@@ -247,7 +264,8 @@ export default function Home() {
   }, [data, dataError, dataLoading, country])
   
   // Load recent results from API with filters
-  const loadRecentDiagnostics = () => {
+  // Use useCallback to ensure it uses the latest country value
+  const loadRecentDiagnostics = useCallback(() => {
     const params = new URLSearchParams()
     params.append('country', country)
     
@@ -267,36 +285,67 @@ export default function Home() {
       params.append('unitName', unitFilter.trim())
     }
     
-    console.log('[UI] Fetching recent diagnostics with filters:', params.toString())
+    console.log('[UI] Fetching recent diagnostics with filters:', params.toString(), 'for country:', country)
     fetch(`/api/diagnostic/recent?${params.toString()}`)
       .then(res => {
         console.log('[UI] Recent diagnostics response status:', res.status)
         return res.json()
       })
-      .then(data => {
+        .then(data => {
         console.log('[UI] Recent diagnostics data received:', {
           hasResults: !!data.results,
           resultsCount: data.results?.length || 0,
+          country: country,
         })
         if (data.results) {
           setRecentResults(data.results)
-          console.log('[UI] Set recent results:', data.results.length, 'items')
+          console.log('[UI] Set recent results:', data.results.length, 'items for country', country)
         } else {
           console.warn('[UI] No results in response:', data)
           setRecentResults([])
-        }
-      })
-      .catch(err => {
+          }
+        })
+        .catch(err => {
         console.error('[UI] Error loading recent results:', err)
         setRecentResults([])
       })
+  }, [country, showMyDiagnostics, dateFilterStart, dateFilterEnd, unitFilter])
+  
+  // Delete a diagnostic result
+  const handleDeleteDiagnostic = async (diagnosticId: string) => {
+    try {
+      console.log('[UI] Deleting diagnostic:', diagnosticId)
+      const response = await fetch(`/api/diagnostic/delete?id=${diagnosticId}`, {
+        method: 'DELETE',
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to delete diagnostic')
+      }
+      
+      const result = await response.json()
+      console.log('[UI] Diagnostic deleted successfully:', result)
+      
+      // Reload the recent diagnostics list
+      loadRecentDiagnostics()
+      
+      // If the deleted diagnostic is currently being viewed, close it
+      if (diagnosticResult && diagnosticResult.id === diagnosticId) {
+        setDiagnosticResult(null)
+      }
+    } catch (error) {
+      console.error('[UI] Error deleting diagnostic:', error)
+      alert(`Failed to delete diagnostic: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
   
   useEffect(() => {
     if (showRecentResults) {
+      console.log('[UI] Loading diagnostics - showRecentResults:', showRecentResults, 'country:', country)
       loadRecentDiagnostics()
     }
-  }, [showRecentResults, country, showMyDiagnostics, dateFilterStart, dateFilterEnd, unitFilter])
+  }, [showRecentResults, loadRecentDiagnostics])
   
   // Log when showRecentResults changes
   useEffect(() => {
@@ -381,11 +430,37 @@ export default function Home() {
       devices = devices.filter(d => d.buildingId === selectedBuildingId)
     }
     
-    if (!deviceSearch.trim()) return devices.slice(0, 50) // Show first 50 when no search
+    // Always include the selected device if it exists, even if it doesn't match filters
+    const selectedDeviceInList = selectedDeviceId ? devices.find(d => d.id === selectedDeviceId) : null
+    
+    if (!deviceSearch.trim()) {
+      // When no search, show ALL devices for the building (no limit)
+      // But ensure selected device is at the top if it exists
+      if (selectedDeviceInList) {
+        // Remove selected device from list if it's there, then add it at the top
+        const otherDevices = devices.filter(d => d.id !== selectedDeviceId)
+        return [selectedDeviceInList, ...otherDevices]
+      }
+      return devices
+    }
     
     const search = deviceSearch.toLowerCase()
-    return devices.filter(d => d.name.toLowerCase().includes(search)).slice(0, 50)
-  }, [data?.devices, selectedBuildingId, deviceSearch])
+    const filtered = devices.filter(d => d.name.toLowerCase().includes(search))
+    
+    // If selected device exists and matches search, ensure it's included
+    if (selectedDeviceInList && selectedDeviceInList.name.toLowerCase().includes(search)) {
+      // Remove selected device from filtered list if it's there, then add it at the top
+      const otherFiltered = filtered.filter(d => d.id !== selectedDeviceId)
+      return [selectedDeviceInList, ...otherFiltered]
+    }
+    
+    // Also include selected device even if it doesn't match search (user might have selected it before searching)
+    if (selectedDeviceInList && !filtered.find(d => d.id === selectedDeviceId)) {
+      return [selectedDeviceInList, ...filtered]
+    }
+    
+    return filtered
+  }, [data?.devices, selectedBuildingId, deviceSearch, selectedDeviceId])
   
   // Get selected building and device
   const selectedBuilding = data?.buildings.find(b => b.id === selectedBuildingId)
@@ -511,15 +586,15 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-800 text-white flex flex-col">
+      <aside className="w-64 bg-slate-800 text-white flex flex-col relative z-10">
         <div className="p-6 border-b border-slate-700">
           <WeMaintainLogo />
         </div>
-        <nav className="flex-1 p-4 overflow-y-auto">
+        <nav className="flex-1 p-4 overflow-y-auto relative z-10">
           <div className="space-y-2">
             {/* Country Selection - Above Navigation */}
             <div className="mb-4">
-              <div className="px-3 py-2 text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">
+              <div className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">
                 Country
               </div>
               <div className="relative" ref={countryDropdownRef}>
@@ -570,7 +645,7 @@ export default function Home() {
               </div>
             </div>
             
-            <div className="px-3 py-2 text-sm font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
               Navigation
             </div>
             <a
@@ -578,14 +653,23 @@ export default function Home() {
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
+                // Close any open dropdowns
+                setShowBuildingDropdown(false)
+                setShowDeviceDropdown(false)
+                setShowCountryDropdown(false)
                 setShowRecentResults(false)
                 setDiagnosticResult(null)
                 // Scroll to top
                 window.scrollTo({ top: 0, behavior: 'smooth' })
               }}
-              className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm text-white font-medium cursor-pointer transition-colors ${
+              onMouseDown={(e) => {
+                // Ensure click works even during loading
+                e.stopPropagation()
+              }}
+              className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm text-white font-medium cursor-pointer transition-colors relative z-10 ${
                 !showRecentResults && !diagnosticResult ? 'bg-slate-700' : 'hover:bg-slate-700'
               }`}
+              style={{ pointerEvents: 'auto' }}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
                 <path fillRule="evenodd" clipRule="evenodd" d="M15.7692 1.85001L19.65 5.73077V20C19.65 21.1358 18.7693 22.0659 17.6535 22.1446L17.5 22.15H6.49998C5.36419 22.15 4.4341 21.2693 4.35537 20.1535L4.34998 20V4.00001C4.34998 2.86422 5.23068 1.93413 6.34643 1.8554L6.49998 1.85001H15.7692ZM14.549 3.15001H6.49998C6.06664 3.15001 5.70905 3.47427 5.6566 3.89338L5.64998 4.00001V20C5.64998 20.4333 5.97424 20.7909 6.39335 20.8434L6.49998 20.85H17.5C17.9333 20.85 18.2909 20.5257 18.3434 20.1066L18.35 20L18.349 7.15001H16.2C15.3367 7.15001 14.6282 6.48699 14.556 5.64237L14.55 5.50001L14.549 3.15001ZM15.849 3.76901L15.85 5.50001C15.85 5.66914 15.9699 5.81026 16.1294 5.8429L16.2 5.85001H17.93L15.849 3.76901Z" fill="currentColor"/>
@@ -598,14 +682,23 @@ export default function Home() {
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
+                // Close any open dropdowns
+                setShowBuildingDropdown(false)
+                setShowDeviceDropdown(false)
+                setShowCountryDropdown(false)
                 setShowRecentResults(true)
                 setDiagnosticResult(null)
                 // Scroll to top to show recent results
                 window.scrollTo({ top: 0, behavior: 'smooth' })
               }}
-              className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm text-white font-medium cursor-pointer transition-colors ${
+              onMouseDown={(e) => {
+                // Ensure click works even during loading
+                e.stopPropagation()
+              }}
+              className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm text-white font-medium cursor-pointer transition-colors relative z-10 ${
                 showRecentResults ? 'bg-slate-700' : 'hover:bg-slate-700'
               }`}
+              style={{ pointerEvents: 'auto' }}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
                 <path fillRule="evenodd" clipRule="evenodd" d="M15 2.20001C15.6351 2.20001 16.15 2.71488 16.15 3.35001L16.149 4.00001H18C18.8633 4.00001 19.5718 4.66303 19.6439 5.50764L19.65 5.65001V20.65C19.65 21.5133 18.987 22.2218 18.1424 22.294L18 22.3H6.00001C5.1367 22.3 4.42825 21.637 4.35606 20.7924L4.35001 20.65V5.65001C4.35001 4.7867 5.01302 4.07825 5.85764 4.00607L6.00001 4.00001H7.85001V3.35001C7.85001 2.75723 8.29852 2.2692 8.8747 2.20676L9.00001 2.20001H15ZM16.15 5.85001C16.15 6.48514 15.6351 7.00001 15 7.00001H9.00001C8.36488 7.00001 7.85001 6.48514 7.85001 5.85001V5.30001H6.00001C5.83087 5.30001 5.68975 5.41999 5.65712 5.57948L5.65001 5.65001V20.65C5.65001 20.8191 5.76998 20.9603 5.92947 20.9929L6.00001 21H18C18.1691 21 18.3103 20.88 18.3429 20.7205L18.35 20.65V5.65001C18.35 5.48088 18.23 5.33976 18.0705 5.30712L18 5.30001H16.149L16.15 5.85001ZM8.25001 16.3C8.66422 16.3 9.00001 16.6358 9.00001 17.05C9.00001 17.4642 8.66422 17.8 8.25001 17.8C7.83579 17.8 7.50001 17.4642 7.50001 17.05C7.50001 16.6358 7.83579 16.3 8.25001 16.3ZM16 16.4C16.359 16.4 16.65 16.691 16.65 17.05C16.65 17.3764 16.4095 17.6465 16.0961 17.693L16 17.7H11C10.641 17.7 10.35 17.409 10.35 17.05C10.35 16.7237 10.5905 16.4535 10.904 16.4071L11 16.4H16ZM8.25001 12.825C8.66422 12.825 9.00001 13.1608 9.00001 13.575C9.00001 13.9892 8.66422 14.325 8.25001 14.325C7.83579 14.325 7.50001 13.9892 7.50001 13.575C7.50001 13.1608 7.83579 12.825 8.25001 12.825ZM16 12.925C16.359 12.925 16.65 13.216 16.65 13.575C16.65 13.9014 16.4095 14.1715 16.0961 14.218L16 14.225H11C10.641 14.225 10.35 13.934 10.35 13.575C10.35 13.2487 10.5905 12.9785 10.904 12.9321L11 12.925H16ZM8.25001 9.35001C8.66422 9.35001 9.00001 9.6858 9.00001 10.1C9.00001 10.5142 8.66422 10.85 8.25001 10.85C7.83579 10.85 7.50001 10.5142 7.50001 10.1C7.50001 9.6858 7.83579 9.35001 8.25001 9.35001ZM16 9.45001C16.359 9.45001 16.65 9.74103 16.65 10.1C16.65 10.4264 16.4095 10.6965 16.0961 10.743L16 10.75H11C10.641 10.75 10.35 10.459 10.35 10.1C10.35 9.77366 10.5905 9.50349 10.904 9.45706L11 9.45001H16ZM14.85 3.50001H9.15001V5.70001H14.85V3.50001Z" fill="currentColor"/>
@@ -613,6 +706,36 @@ export default function Home() {
               <span>Recent Diagnostics</span>
             </a>
           </div>
+          
+          {/* Admin Tools Section - Only visible to matthieu@wemaintain.com */}
+          {session?.user?.email === 'matthieu@wemaintain.com' && (
+            <div className="pb-4 mt-4">
+              <div className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Admin</div>
+              <div className="space-y-2">
+                <a
+                  href="/prompt-testing"
+                  className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-white font-medium hover:bg-slate-700 transition-colors"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+                    <path fillRule="evenodd" clipRule="evenodd" d="M6.41792 13.8132C6.53697 13.8986 6.67554 13.9585 6.82564 13.9849C6.88226 13.9948 6.94052 14 6.99998 14C7.24814 14 7.47518 13.9096 7.64998 13.76V13.76C7.86423 13.5766 8.00001 13.3042 8.00001 13C8.00001 12.6959 7.86423 12.4234 7.64998 12.24V12.24C7.62813 12.2213 7.60546 12.2035 7.58204 12.1868C7.46563 12.1033 7.33057 12.0442 7.18431 12.017C7.12457 12.0058 7.06297 12 7.00001 12C6.44773 12 6.00001 12.4477 6.00001 13C6.00001 13.3351 6.16487 13.6318 6.41792 13.8132ZM6.34998 10.7932C5.39627 11.0736 4.70001 11.9555 4.70001 13C4.70001 14.0445 5.39627 14.9264 6.34998 15.2069L6.34998 20C6.34998 20.359 6.64099 20.65 6.99998 20.65C7.35896 20.65 7.64998 20.359 7.64998 20L7.64998 15.2069C8.60372 14.9264 9.30001 14.0445 9.30001 13C9.30001 11.9555 8.60372 11.0736 7.64998 10.7931L7.64998 4.00001C7.64998 3.64102 7.35896 3.35001 6.99998 3.35001C6.64099 3.35001 6.34998 3.64102 6.34998 4.00001L6.34998 10.7932Z" fill="currentColor"/>
+                    <path fillRule="evenodd" clipRule="evenodd" d="M16.4179 16.8132C16.5351 16.8972 16.6711 16.9566 16.8185 16.9836C16.8774 16.9944 16.938 17 17 17C17.2481 17 17.4752 16.9096 17.65 16.76V16.76C17.8642 16.5766 18 16.3042 18 16C18 15.6959 17.8642 15.4234 17.65 15.24V15.24C17.6281 15.2213 17.6055 15.2035 17.582 15.1868C17.4656 15.1033 17.3305 15.0442 17.1842 15.0169C17.1245 15.0058 17.0629 15 17 15C16.4477 15 16 15.4477 16 16C16 16.3351 16.1649 16.6318 16.4179 16.8132ZM16.35 13.7932C15.3963 14.0736 14.7 14.9555 14.7 16C14.7 17.0445 15.3963 17.9264 16.35 18.2069L16.35 20C16.35 20.359 16.641 20.65 17 20.65C17.359 20.65 17.65 20.359 17.65 20L17.65 18.2069C18.6037 17.9264 19.3 17.0445 19.3 16C19.3 14.9555 18.6037 14.0736 17.65 13.7931L17.65 4.00001C17.65 3.64102 17.359 3.35001 17 3.35001C16.641 3.35001 16.35 3.64102 16.35 4.00001L16.35 13.7932Z" fill="currentColor"/>
+                    <path fillRule="evenodd" clipRule="evenodd" d="M11.4904 8.86059C11.5549 8.89885 11.624 8.93007 11.6967 8.95319C11.7924 8.9836 11.8943 9 12 9C12.2481 9 12.4752 8.90961 12.65 8.75997V8.76C12.8642 8.57659 13 8.30416 13 8.00001C13 7.69586 12.8642 7.42343 12.65 7.24002V7.24003C12.5844 7.18392 12.5115 7.13613 12.4329 7.09832C12.4054 7.0851 12.3773 7.07311 12.3485 7.0624C12.24 7.02205 12.1226 7.00001 12 7.00001C11.4477 7.00001 11 7.44773 11 8.00001C11 8.36617 11.1968 8.68636 11.4904 8.86059ZM11.35 5.79316C10.3963 6.07363 9.70001 6.95551 9.70001 8.00001C9.70001 9.04452 10.3963 9.9264 11.35 10.2069L11.35 20C11.35 20.359 11.641 20.65 12 20.65C12.359 20.65 12.65 20.359 12.65 20L12.65 10.2069C13.6037 9.92644 14.3 9.04454 14.3 8.00001C14.3 6.95548 13.6037 6.07358 12.65 5.79313L12.65 4.00001C12.65 3.64102 12.359 3.35001 12 3.35001C11.641 3.35001 11.35 3.64102 11.35 4.00001L11.35 5.79316Z" fill="currentColor"/>
+                  </svg>
+                  <span>Prompt Testing</span>
+                </a>
+                <a
+                  href="/usage-analytics"
+                  className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-white font-medium hover:bg-slate-700 transition-colors"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+                    <path d="M3 3V21H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M7 16L12 11L16 15L21 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <span>Usage Analytics</span>
+                </a>
+              </div>
+            </div>
+          )}
         </nav>
         {/* User Menu at Bottom */}
         <UserMenu />
@@ -720,11 +843,12 @@ export default function Home() {
                     return (
                       <div
                         key={result.unitId || idx}
-                        className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer"
+                        className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer relative"
                         onClick={() => {
                           console.log('[UI] Clicked on recent diagnostic:', result.unitName)
                           setDiagnosticResult(result)
                           setShowRecentResults(false)
+                          setActiveTab('analysis') // Land on Analysis tab when opening existing diagnostic
                           window.scrollTo({ top: 0, behavior: 'smooth' })
                         }}
                       >
@@ -799,6 +923,27 @@ export default function Home() {
                             </svg>
                           </div>
                         </div>
+                        
+                        {/* Delete Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation() // Prevent card click
+                            if (!result.id) {
+                              console.error('[UI] Cannot delete diagnostic: missing ID')
+                              return
+                            }
+                            const confirmDelete = window.confirm(`Are you sure you want to delete this diagnostic?\n\n${result.unitName} - ${result.buildingName}\n\nThis action cannot be undone.`)
+                            if (confirmDelete) {
+                              handleDeleteDiagnostic(result.id)
+                            }
+                          }}
+                          className="absolute bottom-2 right-2 p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Delete diagnostic"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path fillRule="evenodd" clipRule="evenodd" d="M18.8286 5.04036C19.0824 5.2942 19.0824 5.70575 18.8286 5.9596L12.9231 11.865L18.8286 17.7702C19.057 17.9987 19.0799 18.3549 18.8971 18.6089L18.8286 18.6895C18.5748 18.9433 18.1632 18.9433 17.9094 18.6895L12.0041 12.784L6.09872 18.6895C5.84488 18.9433 5.43333 18.9433 5.17949 18.6895C4.92565 18.4356 4.92565 18.0241 5.17949 17.7702L11.0851 11.865L5.17949 5.9596C4.95103 5.73114 4.92818 5.37493 5.11095 5.12092L5.17949 5.04036C5.43333 4.78652 5.84488 4.78652 6.09872 5.04036L12.0041 10.946L17.9094 5.04036C18.1632 4.78652 18.5748 4.78652 18.8286 5.04036Z" fill="currentColor"/>
+                          </svg>
+                        </button>
                       </div>
                     )
                   })}
@@ -811,13 +956,19 @@ export default function Home() {
           {!showRecentResults && !diagnosticResult && (
             <>
               <h1 className="text-3xl font-bold mb-8 text-gray-900">Lift Diagnostic Summary</h1>
-              
-              {/* Building Selection */}
+      
+      {/* Building Selection */}
           <div className="mb-6 relative">
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-medium text-gray-700">Building</label>
               {dataLoading && (
-                <span className="text-xs text-gray-500">Loading buildings for {COUNTRIES.find(c => c.code === country)?.name}...</span>
+                <span className="text-xs text-gray-500 flex items-center gap-1">
+                  <svg className="animate-spin h-3 w-3 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Loading buildings for {COUNTRIES.find(c => c.code === country)?.name}...
+                </span>
               )}
               {!dataLoading && data?.buildings && (
                 <span className="text-xs text-gray-500">
@@ -848,7 +999,6 @@ export default function Home() {
                 }}
                 placeholder={`Type building name or address... (${COUNTRIES.find(c => c.code === country)?.name})`}
                 className="w-full p-3 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={dataLoading}
               />
               {showBuildingDropdown && data?.buildings && (
                 <div className="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
@@ -916,8 +1066,8 @@ export default function Home() {
                   }
                 }}
                 placeholder={selectedBuildingId ? "Type device name..." : "Select a building first"}
-                className="w-full p-3 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
-                disabled={!selectedBuildingId || dataLoading}
+                className={`w-full p-3 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${!selectedBuildingId ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+                disabled={!selectedBuildingId}
               />
               {showDeviceDropdown && selectedBuildingId && data?.devices && (
                 <div className="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
@@ -997,7 +1147,7 @@ export default function Home() {
                       </div>
                       <p className="text-gray-600 font-medium">Inspecting the unit, please wait...</p>
                       <p className="text-sm text-gray-500 mt-2">This may take up to 20 seconds</p>
-                    </div>
+        </div>
                   )}
                 </>
               )}
@@ -1403,12 +1553,17 @@ export default function Home() {
                                             <span>{translateStateKey(issue.stateKey || '')}{issue.problemKey ? `: ${translateProblemKey(issue.problemKey)}` : ''}</span>
                                           </p>
                                         ))}
-                                                    {/* Show parts from analysis partsReplaced (already processed) */}
+                                                    {/* Show parts from analysis partsReplaced (only if explicitly linked to this visit) */}
                                                     {diagnosticResult.analysis?.partsReplaced?.filter((part: any) => {
-                                                      if (!part.replacementDate) return false
-                                                      const partDate = new Date(part.replacementDate)
-                                                      const vDate = new Date(visitDate)
-                                                      return Math.abs(partDate.getTime() - vDate.getTime()) < 7 * 24 * 60 * 60 * 1000 // Within 7 days
+                                                      // Only show parts that are explicitly linked to THIS specific visit
+                                                      // linkedToVisit should match the visit date exactly
+                                                      if (!part.linkedToVisit) return false
+                                                      
+                                                      // Normalize both dates to compare (handle different formats)
+                                                      const partLinkedDate = new Date(part.linkedToVisit).toDateString()
+                                                      const thisVisitDate = new Date(visitDate).toDateString()
+                                                      
+                                                      return partLinkedDate === thisVisitDate
                                                     }).slice(0, 2).map((part: any, pIdx: number) => (
                                                       <p key={`part-${pIdx}`} className="text-black text-xs break-words">
                                                         🔧 Part replaced: {part.partName || 'Part'}
@@ -1462,12 +1617,17 @@ export default function Home() {
                                             <span>{translateStateKey(issue.stateKey || '')}{issue.problemKey ? `: ${translateProblemKey(issue.problemKey)}` : ''}</span>
                                           </p>
                                         ))}
-                                        {/* Show parts from analysis partsReplaced (already processed) */}
+                                        {/* Show parts from analysis partsReplaced (only if explicitly linked to this visit) */}
                                         {diagnosticResult.analysis?.partsReplaced?.filter((part: any) => {
-                                          if (!part.replacementDate) return false
-                                          const partDate = new Date(part.replacementDate)
-                                          const visitDate = event.date
-                                          return Math.abs(partDate.getTime() - visitDate.getTime()) < 7 * 24 * 60 * 60 * 1000 // Within 7 days
+                                          // Only show parts that are explicitly linked to THIS specific visit
+                                          // linkedToVisit should match the visit date exactly
+                                          if (!part.linkedToVisit) return false
+                                          
+                                          // Normalize both dates to compare (handle different formats)
+                                          const partLinkedDate = new Date(part.linkedToVisit).toDateString()
+                                          const thisVisitDate = new Date(event.date).toDateString()
+                                          
+                                          return partLinkedDate === thisVisitDate
                                         }).slice(0, 2).map((part: any, pIdx: number) => (
                                           <p key={`part-${pIdx}`} className="text-black text-xs break-words">
                                             🔧 Part replaced: {part.partName || 'Part'}
@@ -1613,18 +1773,149 @@ export default function Home() {
             
             {activeTab === 'analysis' && (
               <>
-                {/* Summary */}
-                {diagnosticResult.analysis?.executiveSummary && (
-                  <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Summary</h3>
-                    <p className="text-gray-700 leading-relaxed">
-                      {diagnosticResult.analysis.executiveSummary.replace(/at Unit /gi, '').replace(/at /gi, '')}
+                {/* Final Executive Summary */}
+                {diagnosticResult.analysis?.finalExecSummary && (
+                  <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Executive Summary</h3>
+                    <p className="text-gray-700 leading-relaxed text-sm">
+                      {diagnosticResult.analysis.finalExecSummary.replace(/at Unit /gi, '').replace(/at /gi, '')}
                     </p>
                   </div>
                 )}
                 
-                {/* Repeated Patterns */}
-                {diagnosticResult.analysis?.repeatedPatterns && diagnosticResult.analysis.repeatedPatterns.length > 0 && (
+                {/* Operational Summary */}
+                {diagnosticResult.analysis?.executiveSummary && (
+                  <div className="mb-10 pb-8 border-b border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Operational Summary</h3>
+                    
+                    {typeof diagnosticResult.analysis.executiveSummary === 'object' ? (
+                      <>
+                        {/* Overview */}
+                        {diagnosticResult.analysis.executiveSummary.overview && (
+                          <div className="mb-5">
+                            <h4 className="text-lg font-semibold text-gray-900 mb-2">Overview</h4>
+                            <p className="text-gray-700 leading-relaxed text-sm">
+                              {diagnosticResult.analysis.executiveSummary.overview.replace(/at Unit /gi, '').replace(/at /gi, '')}
+                            </p>
+                          </div>
+                        )}
+                        
+                        {/* Summary of Events */}
+                        {diagnosticResult.analysis.executiveSummary.summaryOfEvents && (
+                          <div className="mb-5">
+                            <h4 className="text-lg font-semibold text-gray-900 mb-2">Summary of Events</h4>
+                            <p className="text-gray-700 leading-relaxed text-sm">
+                              {diagnosticResult.analysis.executiveSummary.summaryOfEvents.replace(/at Unit /gi, '').replace(/at /gi, '')}
+                            </p>
+                          </div>
+                        )}
+                        
+                        {/* Current Situation */}
+                        {diagnosticResult.analysis.executiveSummary.currentSituation && (
+                          <div>
+                            <h4 className="text-lg font-semibold text-gray-900 mb-2">Current Situation and Next Steps</h4>
+                            <p className="text-gray-700 leading-relaxed text-sm">
+                              {diagnosticResult.analysis.executiveSummary.currentSituation.replace(/at Unit /gi, '').replace(/at /gi, '')}
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-gray-700 leading-relaxed text-sm">
+                        {diagnosticResult.analysis.executiveSummary.replace(/at Unit /gi, '').replace(/at /gi, '')}
+                      </p>
+                    )}
+                  </div>
+                )}
+                
+                {/* Technical Summary */}
+                {diagnosticResult.analysis?.technicalSummary && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Technical Summary</h3>
+                    
+                    {/* Overview */}
+                    {diagnosticResult.analysis.technicalSummary.overview && (
+                      <p className="text-gray-700 leading-relaxed text-sm mb-6">{diagnosticResult.analysis.technicalSummary.overview}</p>
+                    )}
+                    
+                    {/* Pattern Details */}
+                    {diagnosticResult.analysis.technicalSummary.patternDetails && diagnosticResult.analysis.technicalSummary.patternDetails.length > 0 && (
+                      <div className="space-y-8">
+                        {diagnosticResult.analysis.technicalSummary.patternDetails.map((pattern: any, idx: number) => (
+                          <div key={idx} className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
+                            {/* Pattern Name */}
+                            <h4 className="text-lg font-semibold text-gray-900 mb-5 pb-3 border-b border-gray-100">{pattern.patternName}</h4>
+                            
+                            {/* Verdict */}
+                            <div className="mb-6 pb-5 border-b border-gray-100">
+                              <p className="text-gray-700 leading-relaxed text-sm">{pattern.verdict}</p>
+                            </div>
+                            
+                            {/* Quantified Impact */}
+                            {pattern.quantifiedImpact && (
+                              <div className="mb-6 pb-5 border-b border-gray-100">
+                                <h5 className="text-lg font-semibold text-gray-900 mb-2">Quantified Impact</h5>
+                                <div className="text-sm text-gray-700 space-y-1.5">
+                                  <p><strong>Breakdowns:</strong> {pattern.quantifiedImpact.breakdownCount} over {pattern.quantifiedImpact.timeSpan}</p>
+                                  <p><strong>Downtime:</strong> {pattern.quantifiedImpact.downtimeHours} total ({pattern.quantifiedImpact.downtimePerEvent} per event)</p>
+                                  <p><strong>Risk Level:</strong> <span className="font-semibold">{pattern.quantifiedImpact.riskLevel.toUpperCase()}</span> - {pattern.quantifiedImpact.riskRationale}</p>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Root Cause Analysis (formerly Driver Tree + Hypotheses) */}
+                            {pattern.driverTree && (
+                              <div className="mb-6 pb-5 border-b border-gray-100">
+                                <h5 className="text-lg font-semibold text-gray-900 mb-2">Root Cause Analysis</h5>
+                                <p className="text-sm text-gray-700 mb-2">{pattern.driverTree.replace(/^Defective materials? →?\s*/i, '').replace(/^Defective materials? and \w+ →?\s*/i, '')}</p>
+                                {/* Add hypothesis reasoning if available */}
+                                {diagnosticResult.analysis?.hypotheses && diagnosticResult.analysis.hypotheses.length > 0 && (
+                                  <div className="mt-3 pt-3 border-t border-gray-100">
+                                    {diagnosticResult.analysis.hypotheses.map((hyp: any, hypIdx: number) => (
+                                      <p key={hypIdx} className="text-sm text-gray-700 mt-1">
+                                        <span className="font-medium">{hyp.category} ({hyp.likelihood} likelihood):</span> {hyp.reasoning}
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            
+                            {/* Actionable Recommendations */}
+                            {pattern.actionableRecommendations && pattern.actionableRecommendations.length > 0 && (
+                              <div className="mb-6 pb-5 border-b border-gray-100">
+                                <h5 className="text-lg font-semibold text-gray-900 mb-2">Actionable Recommendations</h5>
+                                <div className="space-y-3">
+                                  {pattern.actionableRecommendations.map((rec: any, recIdx: number) => (
+                                    <div key={recIdx} className="text-sm text-gray-700">
+                                      <p className="font-medium">{rec.action}</p>
+                                      <p className="text-sm text-gray-600 mt-1">
+                                        Timeframe: <span className="font-medium">{rec.timeframe.replace(/_/g, ' ')}</span>
+                                      </p>
+                                      <p className="text-sm text-gray-600">Expected: {rec.expectedOutcome}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Resolution Probability */}
+                            {pattern.resolutionProbability && (
+                              <div>
+                                <h5 className="text-lg font-semibold text-gray-900 mb-2">Probability of Resolution</h5>
+                                <p className="text-sm text-gray-700"><strong>Success Rate:</strong> {pattern.resolutionProbability.probability}</p>
+                                <p className="text-sm text-gray-700 mt-1"><strong>If issue persists:</strong> {pattern.resolutionProbability.escalationPath}</p>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {/* Fallback: Show Repeated Patterns if Technical Summary not available */}
+                {!diagnosticResult.analysis?.technicalSummary && diagnosticResult.analysis?.repeatedPatterns && diagnosticResult.analysis.repeatedPatterns.length > 0 && (
                   <div className="mb-6">
                     <h3 className="text-lg font-semibold text-gray-900 mb-3">Repeated Patterns</h3>
                     <div className="space-y-3">
@@ -1661,8 +1952,8 @@ export default function Home() {
                   </div>
                 )}
                 
-                {/* Hypotheses */}
-                {diagnosticResult.analysis?.hypotheses && diagnosticResult.analysis.hypotheses.length > 0 && (
+                {/* Hypotheses - Only show if Technical Summary not available */}
+                {!diagnosticResult.analysis?.technicalSummary && diagnosticResult.analysis?.hypotheses && diagnosticResult.analysis.hypotheses.length > 0 && (
                   <div className="mb-6">
                     <h3 className="text-lg font-semibold text-gray-900 mb-3">Likely Causes</h3>
                     <div className="space-y-3">
@@ -1678,17 +1969,6 @@ export default function Home() {
                   </div>
                 )}
                 
-                {/* Suggested Checks */}
-                {diagnosticResult.analysis?.suggestedChecks && diagnosticResult.analysis.suggestedChecks.length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Suggested Next Checks</h3>
-                    <ul className="list-disc list-inside space-y-1 text-gray-700">
-                      {diagnosticResult.analysis.suggestedChecks.map((check: string, idx: number) => (
-                        <li key={idx}>{check}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
               </>
             )}
 

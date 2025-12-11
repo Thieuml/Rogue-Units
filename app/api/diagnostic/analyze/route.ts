@@ -5,6 +5,8 @@ import { fetchVisitReports, fetchBreakdowns, fetchMaintenanceIssues, fetchRepair
 import { generateDiagnosticAnalysis, DiagnosticData } from '@/lib/llm-analysis'
 import { parseDaysFromContext } from '@/lib/date-parser'
 import { storeDiagnostic } from '@/lib/storage'
+import { getAnalysisVersion } from '@/lib/llm-analysis-config'
+import { normalizeToV1 } from '@/lib/llm-analysis-adapter'
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,7 +34,7 @@ export async function POST(request: NextRequest) {
     }
     
     const body = await request.json()
-    const { unitId, unitName, buildingId, buildingName, context, country } = body
+    const { unitId, unitName, buildingId, buildingName, context, country, _forceVersion } = body
     
     if (!unitId || !unitName || !buildingId || !buildingName) {
       return NextResponse.json(
@@ -40,6 +42,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+    
+    // Allow developer testing page to force a specific version
+    const forcedVersion = _forceVersion === 'v1' || _forceVersion === 'v2' ? _forceVersion : null
     
     // Get user session for tracking who generated the diagnostic
     const session = await getServerSession(authOptions)
@@ -139,11 +144,35 @@ export async function POST(request: NextRequest) {
     }
     
     // Generate LLM analysis
-    console.log(`[API] Generating LLM analysis`)
+    // Use forced version from developer testing, otherwise use configured version
+    const version = forcedVersion || getAnalysisVersion()
+    console.log(`[API] Generating LLM analysis (version: ${version}${forcedVersion ? ' [FORCED]' : ''})`)
     let analysis
+    let normalizedAnalysis // For UI compatibility (always V1 format)
     try {
-      analysis = await generateDiagnosticAnalysis(diagnosticData)
-      console.log(`[API] LLM analysis completed successfully`)
+      // Temporarily override the version for this request if forced
+      if (forcedVersion) {
+        const originalEnv = process.env.DIAGNOSTIC_ANALYSIS_VERSION
+        process.env.DIAGNOSTIC_ANALYSIS_VERSION = forcedVersion
+        try {
+          analysis = await generateDiagnosticAnalysis(diagnosticData)
+        } finally {
+          // Restore original version
+          if (originalEnv) {
+            process.env.DIAGNOSTIC_ANALYSIS_VERSION = originalEnv
+          } else {
+            delete process.env.DIAGNOSTIC_ANALYSIS_VERSION
+          }
+        }
+      } else {
+        analysis = await generateDiagnosticAnalysis(diagnosticData)
+      }
+      
+      // Normalize to V1 format for UI compatibility during transition
+      // This allows us to run v2 in production while UI still expects v1
+      normalizedAnalysis = normalizeToV1(analysis)
+      
+      console.log(`[API] LLM analysis completed successfully (version: ${version})`)
     } catch (error) {
       console.error('[API] Error generating LLM analysis:', error)
       const errorMsg = error instanceof Error ? error.message : String(error)
@@ -152,6 +181,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Store diagnostic result for recent diagnostics
+    // Store the original analysis (v1 or v2) in database
     try {
       await storeDiagnostic({
         unitId,
@@ -165,9 +195,9 @@ export async function POST(request: NextRequest) {
         breakdowns,
         maintenanceIssues,
         repairRequests,
-        analysis,
+        analysis, // Store original format (v1 or v2)
       })
-      console.log(`[API] Stored diagnostic for ${unitName} by ${userName || 'unknown user'}`)
+      console.log(`[API] Stored diagnostic for ${unitName} by ${userName || 'unknown user'} (version: ${version})`)
     } catch (error) {
       console.error('[API] Error storing diagnostic:', error)
       // Don't fail the request if storage fails
@@ -178,7 +208,9 @@ export async function POST(request: NextRequest) {
       breakdowns,
       maintenanceIssues,
       repairRequests,
-      analysis,
+      analysis: normalizedAnalysis, // Return V1 format for UI compatibility
+      rawAnalysis: analysis, // Include raw analysis (V1 or V2) for testing/debugging
+      _analysisVersion: version, // Include version for debugging/monitoring
     })
   } catch (error) {
     console.error('[API] Error analyzing diagnostic:', error)

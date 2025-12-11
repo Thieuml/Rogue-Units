@@ -3,6 +3,8 @@
  */
 
 import OpenAI from 'openai'
+import { getAnalysisVersion } from './llm-analysis-config'
+import type { DiagnosticAnalysisV2 } from './llm-analysis-v2'
 
 // Clean and validate API key
 const rawApiKey = process.env.OPENAI_API_KEY || ''
@@ -46,8 +48,13 @@ export interface DiagnosticData {
   context?: string
 }
 
-export interface DiagnosticAnalysis {
-  executiveSummary: string
+export interface DiagnosticAnalysisV1 {
+  executiveSummary: {
+    overview: string
+    summaryOfEvents: string
+    currentSituation: string
+  }
+  finalExecSummary?: string
   partsReplaced: Array<{
     partName: string
     partFamily: string
@@ -73,6 +80,33 @@ export interface DiagnosticAnalysis {
     escalationPath?: string
     correlation?: string
   }>
+  technicalSummary?: {
+    overview: string
+    patternDetails: Array<{
+      patternName: string
+      verdict: string
+      quantifiedImpact: {
+        rootCause: string
+        breakdownCount: number
+        timeSpan: string
+        downtimeHours: string
+        downtimePerEvent: string
+        riskLevel: 'low' | 'medium' | 'high'
+        riskRationale: string
+      }
+      driverTree: string
+      actionableRecommendations: Array<{
+        action: string
+        timeframe: 'immediate' | 'within_24h' | 'within_week' | 'next_service'
+        owner: 'technician' | 'engineer' | 'specialist'
+        expectedOutcome: string
+      }>
+      resolutionProbability: {
+        probability: string
+        escalationPath: string
+      }
+    }>
+  }
   hypotheses: Array<{
     category: string
     likelihood: 'low' | 'medium' | 'high'
@@ -82,10 +116,53 @@ export interface DiagnosticAnalysis {
   confidenceLevel: 'low' | 'medium' | 'high'
 }
 
+// Backward compatibility alias
+export type DiagnosticAnalysis = DiagnosticAnalysisV1
+
 /**
- * Get the system prompt with all stable behavior instructions
+ * Deduplicate parts in partsReplaced array (safety net if LLM ignores prompt)
+ * Keep only the entry with the highest priority visit link for each unique part
  */
-function getSystemPrompt(): string {
+function deduplicatePartsReplaced(parts: DiagnosticAnalysisV1['partsReplaced']) {
+  const seen = new Map<string, DiagnosticAnalysisV1['partsReplaced'][0]>()
+  const duplicates: string[] = []
+  
+  for (const part of parts) {
+    const key = `${part.partName}|${part.repairRequestNumber}`
+    
+    if (seen.has(key)) {
+      // Duplicate found - keep the one with better visit link
+      const existing = seen.get(key)!
+      duplicates.push(`${part.partName} (RR: ${part.repairRequestNumber})`)
+      
+      // Priority: REPAIR visit > any visit > no visit
+      // If both have visits, keep the one with linkedToVisit (means it matched criteria)
+      if (!existing.linkedToVisit && part.linkedToVisit) {
+        seen.set(key, part)
+      } else if (existing.linkedToVisit && !part.linkedToVisit) {
+        // Keep existing
+      } else if (part.linkedToVisit && part.linkedToVisit.length > 0) {
+        // Both have links - keep the one we found first (usually higher priority)
+        // Or keep the one with earlier date if we want to prioritize that
+      }
+      // Otherwise keep existing (first found)
+    } else {
+      seen.set(key, part)
+    }
+  }
+  
+  return {
+    parts: Array.from(seen.values()),
+    removedCount: parts.length - seen.size,
+    duplicates: duplicates,
+  }
+}
+
+/**
+ * Get the system prompt with all stable behavior instructions (V1)
+ * This is the original prompt that has been refined through many iterations
+ */
+function getSystemPromptV1(): string {
   return `You are a technical expert analyzing lift diagnostic data. Generate a structured diagnostic summary in JSON format. Be concise, actionable, and focus on patterns and likely causes.
 
 **Reasoning Workflow:**
@@ -101,23 +178,87 @@ Follow this strict workflow internally. You may think step-by-step, but only out
    - This chronological list is for internal reasoning only - do not include it in your output
 
 2. **Link Parts ↔ Visits ↔ Breakdowns Using Date Rules:**
-   - **CRITICAL: Each part appears ONCE only in partsReplaced array. Never create duplicate entries for the same part.**
-   - **Parts Replacement Date Window:** For repair requests with status = DONE and hasPartAttached = true, the replacement may have occurred anywhere between requestedDate and stateStartDate. DO NOT assume replacementDate = stateStartDate. The actual replacement happened during a visit within this date range.
-   - **Parts ↔ Visits Linking:** Find visits with completedDate between repair request requestedDate and stateStartDate (inclusive). Select ONE visit using this priority:
+   
+   **CRITICAL PART REPLACEMENT RULES (Read First):**
+   - Each unique part (identified by partName + repairRequestNumber) appears EXACTLY ONCE in partsReplaced array
+   - Each part can link to AT MOST ONE visit (never multiple visits)
+   - One part → One entry → One visit maximum
+   - NEVER create multiple partsReplaced entries for the same part
+   - NEVER link the same part to multiple visits
+   
+   **EXAMPLE OF CORRECT BEHAVIOR:**
+   Given: Part "MEMCO model 280 box" from repair request RR-12345
+   Found matching visits:
+   - Oct 23: REPAIR visit, comment "Remplacement boîtier Memco" (HIGHEST confidence - has action word + part keyword)
+   - Oct 22: Breakdown visit, comment "Coffret de porte en défaut" (Lower confidence - no replacement action)
+   
+   ✅ CORRECT OUTPUT (Do this):
+   {
+     "partsReplaced": [
+       {
+         "partName": "MEMCO model 280 box",
+         "repairRequestNumber": "RR-12345",
+         "replacementDate": "Oct 23, 2025",
+         "linkedToVisit": "Oct 23, 2025"
+       }
+     ]
+   }
+   // ^^ ONE ENTRY ONLY - Selected the HIGHEST confidence visit
+   
+   ❌ WRONG OUTPUT (NEVER do this):
+   {
+     "partsReplaced": [
+       {
+         "partName": "MEMCO model 280 box",
+         "repairRequestNumber": "RR-12345",
+         "replacementDate": "Oct 23, 2025",
+         "linkedToVisit": "Oct 23, 2025"
+       },
+       {
+         "partName": "MEMCO model 280 box",  // ← DUPLICATE! WRONG!
+         "repairRequestNumber": "RR-12345",
+         "replacementDate": "Oct 22, 2025",
+         "linkedToVisit": "Oct 22, 2025"
+       }
+     ]
+   }
+   // ^^ TWO ENTRIES for same part - THIS IS AN ERROR
+   
+   **Parts Replacement Date Window:**
+   For repair requests with status = DONE and hasPartAttached = true, the replacement may have occurred anywhere between requestedDate and stateStartDate. DO NOT assume replacementDate = stateStartDate. The actual replacement happened during a visit within this date range.
+   
+   **Parts ↔ Visits Linking Process (Execute Once Per Part):**
+   For each unique part, find ALL visits with completedDate between repair request requestedDate and stateStartDate (inclusive), then SELECT ONLY ONE visit using this priority:
      (1) REPAIR visit type with replacement action words AND part type keywords in globalComment (highest confidence)
      (2) REPAIR visit type without clear replacement indicators
      (3) Other visit type with replacement action words AND part type keywords in globalComment
      (4) Closest date to stateStartDate
-   - **CRITICAL: Comment Analysis for Part Replacement:**
+   
+   **CRITICAL: After selecting the ONE best visit for a part:**
+   - Set replacementDate = selected visit's completedDate
+   - Set linkedToVisit = that visit date
+   - Create ONLY ONE entry in partsReplaced for this part
+   - Do NOT create additional entries even if the part matches other visits
+   - STOP processing this part - move to next part
+   
+   **If no visit matches the date range:**
+   - Set replacementDate = stateStartDate
+   - Leave linkedToVisit empty (not null, empty string)
+   - Create ONE entry in partsReplaced
+   
+   **CRITICAL: Comment Analysis for Part Replacement:**
      * **Action Words:** Look for replacement-related verbs in globalComment: "replaced", "replacement", "fitted", "supplied", "installed", "changed", "swapped", "fitted new", "supplied and fitted", etc. These indicate part replacement activity.
      * **Part Type Keywords:** Extract key words from part name, part family, and part sub-family (e.g., "battery", "contact", "door", "roller", "controller", "UPS", "power supply", "sensor", "motor"). Check if these keywords appear in the visit's globalComment.
      * **High Confidence Match:** Visit comment contains BOTH action words (replaced/fitted/supplied) AND part type keywords. Example: "Supplied and fitted new UPS battery" matches part "Osram Power supply TFOS02550" because comment has "fitted"/"supplied" (action) and "UPS"/"battery" (part type related to power supply).
      * **Low Confidence/No Match:** If comment has no replacement action words OR no part type keywords, DO NOT link unless no better match exists. Avoid linking parts to visits that are clearly unrelated (e.g., door contact part linked to visit about motor adjustment with no mention of door or contact).
-   - **Replacement Date:** Set replacementDate to the selected visit's completedDate. Set linkedToVisit to that visit date. If no visit matches within the date range, use stateStartDate as replacementDate and leave linkedToVisit empty.
-   - **Parts ↔ Breakdowns:** Link part to most recent breakdown on same/related component that ended +/- 2 days before replacement date (or ongoing at replacement time).
-   - **Parts Component Derivation (priority order):** (1) Part name keywords ("door contact", "roller", "controller"), (2) Part family/sub-family, (3) Matching breakdown failureLocations or maintenance issue component.
-   - **Breakdowns ↔ Visits:** Find visits during breakdown period (visit date between breakdown startTime and endTime).
-   - **Maintenance Issues ↔ Visits:** Find visits on same date or within 1 day.
+   
+   **Parts ↔ Breakdowns:** Link part to most recent breakdown on same/related component that ended +/- 2 days before replacement date (or ongoing at replacement time).
+   
+   **Parts Component Derivation (priority order):** (1) Part name keywords ("door contact", "roller", "controller"), (2) Part family/sub-family, (3) Matching breakdown failureLocations or maintenance issue component.
+   
+   **Breakdowns ↔ Visits:** Find visits during breakdown period (visit date between breakdown startTime and endTime).
+   
+   **Maintenance Issues ↔ Visits:** Find visits on same date or within 1 day.
 
 3. **Detect Patterns (Only Include Patterns ≥ 2 Occurrences):**
    - Group similar events by:
@@ -134,19 +275,53 @@ Follow this strict workflow internally. You may think step-by-step, but only out
 
 4. **Generate Final JSON Output:**
    - Use the chronological understanding and linked relationships to write:
-     * executiveSummary: A concise summary (typically 2-3 sentences, but 5-6 sentences if there are many issues, never more than 10 sentences) that includes:
-       - Specific issues/problems identified (e.g., "Doors closing on passengers", "Doors snagging", "Lift B+C doors opening on wrong side")
-       - Key technical details when relevant (component names, parameters, settings changed, parts replaced)
-       - Important dates/timeline context (when issues occurred, when actions were taken)
-       - Root causes or contributing factors identified
-       - Current status or outcomes (resolved, ongoing, actions taken)
-       - Expert involvement if mentioned in visit comments (engineer names, external experts)
+     * executiveSummary: Structured operational summary with three clear sections:
+       - **overview** (1-2 sentences): High-level summary of what issues the lift has experienced and primary components affected
+       - **summaryOfEvents** (detailed paragraph): Chronological narrative of key events, including specific dates, engineer names, actions taken, parts replaced, and what was found. Reference specific incidents with dates and engineer involvement. Be specific and technical, referencing actual components, dates, and actions taken.
+       - **currentSituation** (2-3 sentences): Current operational status, what has been resolved, what remains ongoing, and recommended next steps or monitoring requirements
        Focus on the most significant issues and their resolution status. Be specific and technical, referencing actual components, dates, and actions taken.
+     * finalExecSummary: A concise 2-3 sentence summary (never more) that synthesizes both the operational summary and technical patterns. This should give executives a quick overview of the situation and key technical findings.
      * partsReplaced: All parts with their links to visits/breakdowns
      * repeatedPatterns: Only patterns with frequency ≥ 2
+     * technicalSummary: **MANDATORY if patterns exist**. A 2-sentence overview of patterns found, followed by detailed analysis of EACH pattern with this structure:
+       🔥 **ONE-SENTENCE VERDICT**: Decisive headline with Root Cause + Consequence + What happens if nothing is done
+       Example: "The lift is suffering from chronic re-levelling failures caused by a deteriorating hydraulic valve; without replacement, downtime will continue."
+       NOT: "Recurring re-levelling faults detected..."
+       
+       🔥 **QUANTIFIED IMPACT**: Include specific numbers:
+       - rootCause: Specific confirmed/likely root cause
+       - breakdownCount: Hard number (e.g., 6)
+       - timeSpan: Duration (e.g., "4 months")
+       - downtimeHours: Total estimated hours (e.g., "~30 hours")
+       - downtimePerEvent: Average per event (e.g., "5+ hours")
+       - riskLevel: low | medium | high
+       - riskRationale: Why this risk level
+       
+       🔥 **DRIVER TREE**: Clear Cause → Effect chain
+       Example: "Hydraulic Valve Wear → Slow leveling response → Controller detects drift → Relevelling fault → Lift shutdown"
+       DO NOT start with vague root causes like "Defective materials" - start with the specific component or technical issue.
+       
+       🔥 **ACTIONABLE RECOMMENDATIONS**: Specific actions with:
+       - Specific technical action (NOT "Inspect X")
+       - Timeframe: immediate | within_24h | within_week | next_service
+       - Owner: technician | engineer | specialist
+       - Expected outcome
+       
+       🔥 **PROBABILITY OF RESOLUTION**:
+       - Estimated probability (e.g., "80-90%")
+       - Escalation path if issue persists
      * hypotheses: Likely causes based on patterns and links (reasoning must reference at least two concrete dated events or parts replacements)
      * suggestedChecks: Actionable steps based on findings
      * confidenceLevel: Based on data quality and pattern strength
+   
+   **MANDATORY FINAL VALIDATION (Execute Before Returning JSON):**
+   Before you return your final JSON output, perform this validation:
+   1. Count occurrences of each (partName + repairRequestNumber) in partsReplaced array
+   2. If ANY part appears MORE THAN ONCE, you made an error:
+      - Keep ONLY the entry with the HIGHEST priority visit link
+      - DELETE all duplicate entries for that part
+   3. Verify: Each unique part appears EXACTLY ONCE in partsReplaced
+   4. DO NOT SKIP THIS VALIDATION - It is mandatory
 
 **Important:** You may think step-by-step internally, but only output the final JSON object in the required format.
 
@@ -168,7 +343,7 @@ These are tasks completed by engineers. Each task includes:
 - Extract key information: what was found, what was done, what parts were replaced, what issues were identified
 - Use comments to understand the sequence of events and root causes
 - Cross-reference comments with repair requests to identify which parts were actually replaced
-- Comments often contain dates and specific component names that help link parts to components
+- Comments often contain descriptions of actions taken and specific component names that help link parts to components
 
 **Breakdowns / Downtimes:**
 These are periods when the lift was not operational. Each breakdown includes:
@@ -184,16 +359,17 @@ These are periods when the lift was not operational. Each breakdown includes:
 
 **Important Notes about Breakdowns:**
 - Comments are accurate at the time they were written, but may not reflect current reality
-- Most comments include dates within the text itself
 - Breakdowns without end_time are still ongoing
 
 **Maintenance Issues / Anomalies:**
 These are issues raised during maintenance visits (regular, quarterly, semi-annual). Engineers answer specific questions about each component, and issues are normalized as:
-- Component (state_key): The component that has an issue
-- Problem (problem_key): The specific problem impacting this component
+- Component (state_key): The component that has an issue. It is coded, not plain language.
+- Problem (problem_key): The specific problem impacting this component. It is coded, not plain language.
 - Question: The question asked to the engineer
 - Answer: The engineer's response
 - Follow Up: Whether the issue was resolved during the visit
+
+**IMPORTANT: Ignore any issues related to signatureNotNeeded. These are never actual issues even though logged as such in the system. Do not include them in your analysis, patterns, or recommendations.**
 
 These issues help identify patterns and root causes. Look for:
 - Recurring problems on the same component
@@ -217,13 +393,16 @@ These are requests raised by engineers to get parts or technical support. Each r
 - Part Sub Family: Sub-family category of the part
 
 **Parts Replacement Logic (Explicit Heuristics):**
-- **CRITICAL: Each unique part must appear exactly ONCE in partsReplaced array. Never create duplicate entries for the same part (same partName + repairRequestNumber).**
+- **CRITICAL: Each unique part (identified by partName + repairRequestNumber) appears EXACTLY ONCE in partsReplaced array. Each part can link to AT MOST ONE visit. One part → One entry → One visit maximum. NEVER create multiple entries for the same part or link it to multiple visits.**
 - **Replacement Date Window:** For repair requests with status = DONE and hasPartAttached = true, the replacement occurred between requestedDate and stateStartDate. The actual replacement happened during a visit within this window.
-- **Visit Linking (Priority Order):**
+- **Visit Linking Process (Execute Once Per Part):**
+  For each unique part, find ALL visits within the date window, then SELECT ONLY ONE visit using this priority:
   (1) REPAIR visit with replacement action words AND part type keywords in globalComment (HIGHEST confidence)
   (2) REPAIR visit without clear replacement indicators
   (3) Other visit type with replacement action words AND part type keywords in globalComment
   (4) Closest date to stateStartDate
+- **After selecting the ONE best visit:** Set replacementDate = visit's completedDate, set linkedToVisit = that date, create ONLY ONE entry in partsReplaced. Do NOT create additional entries even if the part matches other visits.
+- **If no visit matches:** Set replacementDate = stateStartDate, leave linkedToVisit empty, create ONE entry.
 - **Comment Analysis for Part Replacement:**
   * **Action Words:** Look for: "replaced", "replacement", "fitted", "supplied", "installed", "changed", "swapped", "fitted new", "supplied and fitted", "installed new", etc.
   * **Part Type Keywords:** Extract keywords from part name/family/sub-family (e.g., "battery", "contact", "door", "roller", "controller", "UPS", "power supply", "sensor", "motor", "shoe plate", "landing door"). Match variations and related terms (e.g., "UPS battery" relates to "power supply", "door contact" relates to "door" and "contact").
@@ -284,7 +463,7 @@ The executive summary should be a concise overview (typically 2-3 sentences, but
   * Their recommendations or findings
 
 **Example Good Summary:**
-"Lift B+C experienced doors opening on the wrong side, partly due to a Port Parameter called 'forbidden zones' not being active, which was corrected in mid October. Subsequent reports of doors failing to open were related to lock snags causing floor aborts. WeMaintain adjusted all locks and door mechanics between 6th and 10th November, and the issue appears to have been eradicated."
+"EPL ChandlerWing LH 20 has experienced recurring issues with door mechanisms, particularly with the door motor and safety edges. On October 14, 2025, the door motor was replaced due to overheating and jamming, which was initially reported on September 23, 2025. The replacement and subsequent adjustments were completed by Kari Onuma, leading to the lift's return to service. However, ongoing issues with door alignment and safety edges were noted, with further adjustments made on October 23, 2025, by Dan Collcutt. Despite these efforts, door lock misalignment persisted, as addressed by Josh Mitchell on December 9, 2025. The root cause appears to be defective materials affecting door components, with multiple breakdowns linked to these issues. The lift is currently operational, but continued monitoring and potential further interventions are recommended."
 
 **Example Bad Summary (too vague):**
 "The lift has had some door issues that were addressed. Various adjustments were made."
@@ -342,10 +521,26 @@ The executive summary should be a concise overview (typically 2-3 sentences, but
 - Be realistic about confidence levels based on data quality and quantity
 - If visit reports show no clear patterns, say so honestly rather than forcing conclusions
 
+**🔥 CRITICAL: TECHNICAL SUMMARY IS MANDATORY 🔥**
+If you generate ANY repeatedPatterns (with frequency ≥ 2), you MUST also generate a technicalSummary section.
+The technicalSummary is NOT optional - it transforms your patterns into actionable decision tools.
+For EVERY pattern in repeatedPatterns, create a matching entry in technicalSummary.patternDetails with:
+- Decisive verdict (not vague observations)
+- Quantified impact with numbers (breakdown counts, downtime hours)
+- Risk assessment (low/medium/high)
+- Driver tree (cause → effect chain)
+- Specific actionable recommendations with timeframes and owners
+- Resolution probability percentage
+
 **Output Format:**
 Generate the analysis in the following JSON format:
 {
-  "executiveSummary": "A concise summary (typically 2-3 sentences, but 5-6 sentences if there are many issues, never more than 10 sentences) that includes: (1) Specific issues identified with component/technical details, (2) Key dates and timeline context, (3) Root causes or contributing factors, (4) Actions taken and current status. Reference specific engineers, experts, or technical details when mentioned in visit comments. Example format: '[Issue description] was identified. [Technical detail/component]. [Action taken/date]. [Current status].'",
+  "executiveSummary": {
+    "overview": "1-2 sentences: High-level summary of what issues the lift has experienced and primary components affected. Example: 'The lift CEP-LIFT OUTBOUND in Building Central Park Railway Station has experienced multiple issues primarily related to the car door mechanisms and the condition of the lift car itself.'",
+    "summaryOfEvents": "Detailed paragraph: Chronological narrative of key events with specific dates, engineer names, actions taken, parts replaced, and findings. Reference specific incidents with dates and engineer involvement. Be specific and technical. Example: 'Notably, on November 21, 2025, the lift was out of service due to the car door being unable to close, attributed to scrapping on the car track, which required a two-man team for adjustment. Temporary repairs were made to the track, but the issue with the car door panel remained unresolved. Additionally, the car door operator motor overheated on November 17, 2025, but was fixed on the same day. Maintenance checks on December 8, 2025, revealed the flooring and wall panels of the lift car to be in poor condition, issues that could not be fixed immediately. The recurring nature of door-related problems suggests underlying material defects or misalignment issues that need further investigation.'",
+    "currentSituation": "2-3 sentences: Current operational status, what has been resolved, what remains ongoing, and recommended next steps or monitoring requirements. Example: 'The lift is currently operational, but ongoing monitoring and potential further interventions are recommended.'"
+  },
+  "finalExecSummary": "2-3 sentences maximum (never more): Synthesizes both operational summary and technical patterns. Quick executive overview of situation and key technical findings.",
   "partsReplaced": [
     {
       "partName": "Name of the part",
@@ -378,6 +573,38 @@ Generate the analysis in the following JSON format:
       "correlation": "How does this pattern correlate with other patterns, breakdowns, or maintenance issues? What connections exist?"
     }
   ],
+  "technicalSummary": {
+    "// NOTE": "⚠️ THIS SECTION IS MANDATORY if you created repeatedPatterns above. Create ONE patternDetails entry for EACH pattern in repeatedPatterns.",
+    "overview": "MANDATORY: 2-sentence overview of ALL patterns found. Summarize what patterns you identified above.",
+    "patternDetails": [
+      {
+        "patternName": "MANDATORY: Brief name matching a pattern from repeatedPatterns above",
+        "verdict": "ONE-SENTENCE DECISIVE STATEMENT: Root Cause + Consequence + What happens if nothing is done. Example: 'The lift is suffering from chronic re-levelling failures caused by a deteriorating hydraulic valve; without replacement, downtime will continue.' NOT: 'Recurring re-levelling faults detected...'",
+        "quantifiedImpact": {
+          "rootCause": "Specific confirmed/likely root cause (e.g., 'Deteriorating hydraulic valve causing slow leveling response')",
+          "breakdownCount": 6,
+          "timeSpan": "Duration (e.g., '4 months')",
+          "downtimeHours": "Estimated total (e.g., '~30 hours')",
+          "downtimePerEvent": "Average per event (e.g., '5+ hours')",
+          "riskLevel": "low|medium|high",
+          "riskRationale": "Why this risk level (e.g., 'High likelihood of recurrence until valve is replaced')"
+        },
+        "driverTree": "Cause → Effect chain. Example: 'Hydraulic Valve Wear → Slow leveling response → Controller detects drift → Relevelling fault → Lift shutdown'. DO NOT start with vague terms like 'Defective materials' - be specific about the technical component or issue.",
+        "actionableRecommendations": [
+          {
+            "action": "Specific, detailed technical action with component/system details. Examples: 'Inspect and replace defective control cabinet components', 'Conduct thorough assessment of door operator setup and materials', 'Replace hydraulic valve and verify cylinder bypass leakage'. NOT vague like 'Inspect hydraulic system' - be specific about what to inspect and what to replace.",
+            "timeframe": "immediate|within_24h|within_week|next_service",
+            "owner": "technician|engineer|specialist",
+            "expectedOutcome": "What this will achieve (e.g., 'High likelihood of eliminating UMD monitoring failures', 'Expected to resolve door operator issues')"
+          }
+        ],
+        "resolutionProbability": {
+          "probability": "Percentage after actions (e.g., '80-90%')",
+          "escalationPath": "What to do if issue persists (e.g., 'If faults persist → escalate to full hydraulic system assessment')"
+        }
+      }
+    ]
+  },
   "hypotheses": [
     {
       "category": "Category name (e.g., 'Door Mechanism', 'Motor Controller', 'Leveling System')",
@@ -393,10 +620,21 @@ Generate the analysis in the following JSON format:
 }
 
 **CRITICAL RULES FOR partsReplaced:**
-- Each unique part (identified by partName + repairRequestNumber) must appear exactly ONCE in partsReplaced array
-- Never create duplicate entries for the same part
-- Each part links to at most ONE visit (prioritize REPAIR visits, then closest date)
-- If multiple visits match, select only the best one using priority rules`
+**CRITICAL FINAL REMINDERS:**
+- Each unique part (identified by partName + repairRequestNumber) appears EXACTLY ONCE in partsReplaced array
+- Each part can link to AT MOST ONE visit (never multiple visits)
+- One part → One entry → One visit maximum
+- NEVER create multiple partsReplaced entries for the same part
+- NEVER link the same part to multiple visits
+- After selecting the best visit for a part, create ONLY ONE entry and do NOT create additional entries even if the part matches other visits
+
+**CRITICAL: technicalSummary is MANDATORY:**
+- If you identified ANY repeatedPatterns (frequency ≥ 2), you MUST create a technicalSummary
+- The technicalSummary transforms repeatedPatterns into actionable decision tools
+- For EACH pattern in repeatedPatterns, create a corresponding entry in technicalSummary.patternDetails
+- Include quantified impact (breakdown counts, downtime hours, risk levels)
+- Provide decisive verdicts and specific actionable recommendations
+- DO NOT skip technicalSummary - it is required whenever patterns exist`
 }
 
 /**
@@ -485,11 +723,31 @@ Generate your analysis following the instructions and output format specified in
 
 /**
  * Generate diagnostic analysis using LLM
+ * Routes to v1 or v2 implementation based on feature flag
  */
 export async function generateDiagnosticAnalysis(
   data: DiagnosticData
-): Promise<DiagnosticAnalysis> {
-  const systemPrompt = getSystemPrompt()
+): Promise<DiagnosticAnalysisV1 | DiagnosticAnalysisV2> {
+  const version = getAnalysisVersion()
+  
+  if (version === 'v2') {
+    // V2 implementation will be loaded dynamically when available
+    const { generateDiagnosticAnalysisV2 } = await import('./llm-prompt-v2')
+    return generateDiagnosticAnalysisV2(data)
+  }
+  
+  // Default to v1
+  return generateDiagnosticAnalysisV1(data)
+}
+
+/**
+ * Generate diagnostic analysis using LLM (V1)
+ * This is the original implementation preserved for backward compatibility
+ */
+export async function generateDiagnosticAnalysisV1(
+  data: DiagnosticData
+): Promise<DiagnosticAnalysisV1> {
+  const systemPrompt = getSystemPromptV1()
   const userMessage = buildUserMessage(data)
   
   // Try models in order of preference
@@ -536,12 +794,46 @@ export async function generateDiagnosticAnalysis(
       
       console.log(`[LLM] Successfully generated analysis using model: ${model}`)
       
+      // SAFETY NET: Deduplicate parts if LLM ignored instructions
+      const deduplicatedParts = deduplicatePartsReplaced(analysis.partsReplaced || [])
+      if (deduplicatedParts.removedCount > 0) {
+        console.warn(`[LLM] ⚠️ Deduplicated ${deduplicatedParts.removedCount} duplicate part entries. LLM ignored prompt instructions.`)
+        console.warn(`[LLM] Duplicates found:`, deduplicatedParts.duplicates)
+      }
+      
+      // Handle both old (string) and new (object) executiveSummary format for backward compatibility
+      let executiveSummary: DiagnosticAnalysisV1['executiveSummary']
+      const execSum = analysis.executiveSummary as any
+      if (typeof execSum === 'string') {
+        // Old format - convert to new structure
+        executiveSummary = {
+          overview: execSum.split('. ').slice(0, 2).join('. ') + '.',
+          summaryOfEvents: execSum,
+          currentSituation: 'Current status requires review.'
+        }
+      } else if (execSum && typeof execSum === 'object' && 'overview' in execSum) {
+        // New format
+        executiveSummary = {
+          overview: execSum.overview || 'No overview available',
+          summaryOfEvents: execSum.summaryOfEvents || 'No events summary available',
+          currentSituation: execSum.currentSituation || 'Current status requires review.'
+        }
+      } else {
+        executiveSummary = {
+          overview: 'No summary available',
+          summaryOfEvents: 'No summary available',
+          currentSituation: 'Current status requires review.'
+        }
+      }
+      
       // Validate and ensure all required fields
       return {
-        executiveSummary: analysis.executiveSummary || 'No summary available',
-        partsReplaced: analysis.partsReplaced || [],
+        executiveSummary,
+        finalExecSummary: analysis.finalExecSummary,
+        partsReplaced: deduplicatedParts.parts,
         timeline: analysis.timeline || [],
         repeatedPatterns: analysis.repeatedPatterns || [],
+        technicalSummary: analysis.technicalSummary, // Include technical summary if present
         hypotheses: analysis.hypotheses || [],
         suggestedChecks: analysis.suggestedChecks || [],
         confidenceLevel: analysis.confidenceLevel || 'medium',

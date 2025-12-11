@@ -14,7 +14,7 @@ export default function SignIn() {
           <WeMaintainLogo />
         </div>
         
-        <h1 className="text-2xl font-bold text-center mb-2">AI Diagnostics</h1>
+        <h1 className="text-2xl font-bold text-center mb-2" style={{ color: '#272C6C' }}>AI Diagnostics</h1>
         <p className="text-gray-600 text-center mb-6">
           Lift Diagnostic Analysis System
         </p>

@@ -970,8 +970,18 @@ export async function fetchMaintenanceIssues(deviceId: string, daysBack: number 
       }
     })
     
-    console.log(`[Looker] Mapped ${mappedRows.length} maintenance issues`)
-    return mappedRows
+    // Filter out signatureNotNeeded issues - these are never actual issues
+    const filteredRows = mappedRows.filter((row: any) => {
+      const problemKey = row.problemKey?.toLowerCase() || ''
+      const stateKey = row.stateKey?.toLowerCase() || ''
+      const answer = row.answer?.toLowerCase() || ''
+      return !problemKey.includes('signaturenotneeded') && 
+             !stateKey.includes('signaturenotneeded') &&
+             !answer.includes('signaturenotneeded')
+    })
+    
+    console.log(`[Looker] Mapped ${mappedRows.length} maintenance issues, filtered to ${filteredRows.length} (removed ${mappedRows.length - filteredRows.length} signatureNotNeeded issues)`)
+    return filteredRows
   } catch (error) {
     console.error('[Looker] Error fetching maintenance issues:', error)
     const errorDetails = error instanceof Error ? {
