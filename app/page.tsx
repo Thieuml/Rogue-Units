@@ -647,6 +647,7 @@ export default function Home() {
         if (summary.currentSituation) {
           textToCopy += 'Current Situation and Next Steps\n\n' + summary.currentSituation.replace(/at Unit /gi, '').replace(/at /gi, '')
         }
+        // NOTE: serviceHandlingReview is intentionally excluded as it's internal only
       } else {
         textToCopy = summary.replace(/at Unit /gi, '').replace(/at /gi, '')
       }
@@ -1187,14 +1188,17 @@ export default function Home() {
       
       {/* Context Input */}
       <div className="mb-6">
-                <label className="block text-sm font-medium mb-2 text-gray-700">
-                  What are you looking for? (Optional - default: last 3 months)
+        <label className="block text-sm font-medium mb-1 text-gray-700">
+          What are you looking for? (Optional)
         </label>
+        <p className="text-xs text-gray-500 italic mb-2">
+          Default Diagnostic Period: last 3 months
+        </p>
         <textarea
           value={context}
           onChange={(e) => setContext(e.target.value)}
-                  placeholder="e.g. change diagnostic period, dig into the recurring car door issues, general overview of recent failures..."
-                  className="w-full p-3 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+          placeholder="e.g. change diagnostic period, dig into the recurring car door issues, general overview of recent failures..."
+          className="w-full p-3 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
           rows={3}
         />
       </div>
@@ -1395,7 +1399,8 @@ export default function Home() {
                   Components History
                 </button>
               </nav>
-              {/* Generate PDF Button - in tabs area */}
+              {/* Generate PDF Button - TEMPORARILY HIDDEN - Will be re-enabled later */}
+              {false && (
               <button
                 onClick={handleGeneratePDF}
                 disabled={isGeneratingPDF}
@@ -1403,6 +1408,7 @@ export default function Home() {
               >
                 {isGeneratingPDF ? 'Generating PDF...' : 'Generate PDF Report (WIP)'}
               </button>
+              )}
             </div>
 
             {/* Tab Content */}
@@ -1924,6 +1930,23 @@ export default function Home() {
                               <h4 className="text-lg font-semibold text-gray-900 mb-3">Current Situation and Next Steps</h4>
                               <p className="text-gray-700 leading-relaxed text-sm">
                                 {diagnosticResult.analysis.executiveSummary.currentSituation.replace(/at Unit /gi, '').replace(/at /gi, '')}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Service Handling Review - Internal Only */}
+                        {diagnosticResult.analysis.executiveSummary.serviceHandlingReview && (
+                          <div className="rounded-lg border-t-2 border-amber-400 shadow-sm" style={{ backgroundColor: 'rgba(251, 191, 36, 0.05)' }}>
+                            <div className="p-5">
+                              <div className="flex items-center gap-3 mb-3">
+                                <h4 className="text-lg font-semibold text-gray-900">Service Handling Review</h4>
+                                <span className="px-2.5 py-0.5 bg-amber-100 text-amber-800 text-xs font-semibold rounded-full border border-amber-200">
+                                  INTERNAL USE
+                                </span>
+                              </div>
+                              <p className="text-gray-600 leading-relaxed text-sm italic">
+                                {diagnosticResult.analysis.executiveSummary.serviceHandlingReview}
                               </p>
                             </div>
                           </div>

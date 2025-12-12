@@ -53,6 +53,7 @@ export interface DiagnosticAnalysisV1 {
     overview: string
     summaryOfEvents: string
     currentSituation: string
+    serviceHandlingReview: string
   }
   finalExecSummary?: string
   partsReplaced: Array<{
@@ -537,8 +538,9 @@ Generate the analysis in the following JSON format:
 {
   "executiveSummary": {
     "overview": "1-2 sentences: High-level summary of what issues the lift has experienced and primary components affected. Example: 'The lift CEP-LIFT OUTBOUND in Building Central Park Railway Station has experienced multiple issues primarily related to the car door mechanisms and the condition of the lift car itself.'",
-    "summaryOfEvents": "Detailed paragraph: Chronological narrative of key events with specific dates, engineer names, actions taken, parts replaced, and findings. Reference specific incidents with dates and engineer involvement. Be specific and technical. Example: 'Notably, on November 21, 2025, the lift was out of service due to the car door being unable to close, attributed to scrapping on the car track, which required a two-man team for adjustment. Temporary repairs were made to the track, but the issue with the car door panel remained unresolved. Additionally, the car door operator motor overheated on November 17, 2025, but was fixed on the same day. Maintenance checks on December 8, 2025, revealed the flooring and wall panels of the lift car to be in poor condition, issues that could not be fixed immediately. The recurring nature of door-related problems suggests underlying material defects or misalignment issues that need further investigation.'",
-    "currentSituation": "2-3 sentences: Current operational status, what has been resolved, what remains ongoing, and recommended next steps or monitoring requirements. Example: 'The lift is currently operational, but ongoing monitoring and potential further interventions are recommended.'"
+    "summaryOfEvents": "🔥 CRITICAL - CHRONOLOGICAL ORDER REQUIRED: Detailed paragraph presenting events in STRICT CHRONOLOGICAL ORDER (earliest to latest). Tell the story as it unfolded in time. Reference specific dates, engineer names, actions taken, parts replaced, and findings. Be specific and technical. ❌ WRONG EXAMPLE (non-chronological): 'A significant breakdown occurred from November 28 to December 3, 2025, during which the lift was out of service. On December 5, 2025, Connor Tarpey performed a valve service, returning the lift to normal operation. The recurring nature of these faults suggests underlying issues with the hydraulic unit's electronic valve, as indicated by the maintenance issue reported on November 27, 2025.' (November 27 mentioned AFTER December 5 is confusing). ✅ CORRECT: Present November 27 event first, then November 28-December 3 breakdown, then December 5 service - in that order.",
+    "currentSituation": "2-3 sentences: Current operational status, what has been resolved, what remains ongoing, and recommended next steps or monitoring requirements. Example: 'The lift is currently operational, but ongoing monitoring and potential further interventions are recommended.'",
+    "serviceHandlingReview": "🔥 MANDATORY - ALWAYS GENERATE THIS FIELD 🔥 INTERNAL USE ONLY - NOT CUSTOMER-FACING: Generate a short internal service handling review (2-4 sentences). Focus on potential gaps in how the issue was handled by the maintenance service, based solely on the sequence of events and outcomes. The objective is to highlight process-level improvement opportunities, not to assign blame. Look for signals such as: recurring faults not escalated early enough, delays in decisive corrective actions (investigations, part replacement, escalation), initial diagnostics contradicted by subsequent findings, temporary fixes where durable solutions may have been appropriate. Explain what may have been underestimated or missed, why this matters from an operational or customer trust perspective, and how this can help operations managers address customer objections. Keep tone professional, factual, and improvement-oriented. Do NOT name individuals. Do NOT speculate beyond what the data supports. If service handling was appropriate, state that clearly (e.g., 'Service handling appears appropriate given the data available. Engineers responded promptly and followed standard escalation procedures.')."
   },
   "finalExecSummary": "2-3 sentences maximum (never more): Synthesizes both operational summary and technical patterns. Quick executive overview of situation and key technical findings.",
   "partsReplaced": [
@@ -599,7 +601,7 @@ Generate the analysis in the following JSON format:
           }
         ],
         "resolutionProbability": {
-          "probability": "Percentage after actions (e.g., '80-90%')",
+          "probability": "🔥 CRITICAL - BE REALISTIC: Provide realistic success rate percentage (e.g., '50-60%', '70-80%'). DO NOT under-estimate field engineer expertise, but DO factor in: (1) History of previous unsuccessful attempts - if engineers have tried similar fixes before without success, lower the probability significantly. (2) Clarity of root cause identification - if issue was clearly identified before actions, but still not resolved, this indicates difficulty and should lower probability. (3) Pattern persistence - recurring issues despite multiple interventions suggest deep-rooted problems requiring specialist intervention. (4) Temporary vs permanent fixes - if only temporary fixes have been applied, probability of permanent resolution is low. Example: If valve issues persisted through 3 previous interventions, success rate should be 40-50%, not 80-90%.",
           "escalationPath": "What to do if issue persists (e.g., 'If faults persist → escalate to full hydraulic system assessment')"
         }
       }
@@ -634,7 +636,14 @@ Generate the analysis in the following JSON format:
 - For EACH pattern in repeatedPatterns, create a corresponding entry in technicalSummary.patternDetails
 - Include quantified impact (breakdown counts, downtime hours, risk levels)
 - Provide decisive verdicts and specific actionable recommendations
-- DO NOT skip technicalSummary - it is required whenever patterns exist`
+- DO NOT skip technicalSummary - it is required whenever patterns exist
+
+**CRITICAL: serviceHandlingReview is MANDATORY:**
+- ALWAYS generate the serviceHandlingReview field in executiveSummary
+- This field is NEVER optional - it must be included in every analysis
+- Even if service handling was appropriate, state that explicitly (e.g., "Service handling appears appropriate given the data available. Engineers responded promptly and followed standard escalation procedures.")
+- This helps operations managers understand service quality patterns and prepare for customer discussions
+- Do NOT leave this field empty or omit it - it is a required field`
 }
 
 /**
@@ -809,20 +818,23 @@ export async function generateDiagnosticAnalysisV1(
         executiveSummary = {
           overview: execSum.split('. ').slice(0, 2).join('. ') + '.',
           summaryOfEvents: execSum,
-          currentSituation: 'Current status requires review.'
+          currentSituation: 'Current status requires review.',
+          serviceHandlingReview: 'Service handling review not available for legacy diagnostics.'
         }
       } else if (execSum && typeof execSum === 'object' && 'overview' in execSum) {
         // New format
         executiveSummary = {
           overview: execSum.overview || 'No overview available',
           summaryOfEvents: execSum.summaryOfEvents || 'No events summary available',
-          currentSituation: execSum.currentSituation || 'Current status requires review.'
+          currentSituation: execSum.currentSituation || 'Current status requires review.',
+          serviceHandlingReview: execSum.serviceHandlingReview || 'Service handling review not available for this diagnostic.'
         }
       } else {
         executiveSummary = {
           overview: 'No summary available',
           summaryOfEvents: 'No summary available',
-          currentSituation: 'Current status requires review.'
+          currentSituation: 'Current status requires review.',
+          serviceHandlingReview: 'Service handling review not available.'
         }
       }
       
