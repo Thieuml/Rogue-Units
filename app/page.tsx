@@ -204,6 +204,7 @@ export default function Home() {
   const [showRecentResults, setShowRecentResults] = useState(false)
   const [recentResults, setRecentResults] = useState<DiagnosticResult[]>([])
   const [activeTab, setActiveTab] = useState<'summary' | 'visits' | 'analysis' | 'components'>('summary')
+  const [copiedSection, setCopiedSection] = useState<string | null>(null)
   
   // Check for view=recent query parameter on mount
   useEffect(() => {
@@ -624,6 +625,36 @@ export default function Home() {
       alert(`Error: ${error instanceof Error ? error.message : 'Failed to generate PDF'}`)
     } finally {
       setIsGeneratingPDF(false)
+    }
+  }
+  
+  const handleCopyOperationalSummary = async () => {
+    if (!diagnosticResult?.analysis?.executiveSummary) return
+    
+    try {
+      let textToCopy = ''
+      const summary = diagnosticResult.analysis.executiveSummary
+      
+      if (typeof summary === 'object') {
+        if (summary.overview) {
+          textToCopy += 'Overview\n\n' + summary.overview.replace(/at Unit /gi, '').replace(/at /gi, '') + '\n\n'
+        }
+        if (summary.summaryOfEvents) {
+          textToCopy += 'Summary of Events\n\n' + summary.summaryOfEvents.replace(/at Unit /gi, '').replace(/at /gi, '') + '\n\n'
+        }
+        if (summary.currentSituation) {
+          textToCopy += 'Current Situation and Next Steps\n\n' + summary.currentSituation.replace(/at Unit /gi, '').replace(/at /gi, '')
+        }
+      } else {
+        textToCopy = summary.replace(/at Unit /gi, '').replace(/at /gi, '')
+      }
+      
+      await navigator.clipboard.writeText(textToCopy)
+      setCopiedSection('operational')
+      setTimeout(() => setCopiedSection(null), 2000)
+    } catch (error) {
+      console.error('Failed to copy:', error)
+      alert('Failed to copy to clipboard')
     }
   }
   
@@ -1155,12 +1186,12 @@ export default function Home() {
       {/* Context Input */}
       <div className="mb-6">
                 <label className="block text-sm font-medium mb-2 text-gray-700">
-                  What are you looking for? (Optional)
+                  What are you looking for? (Optional - default: last 3 months)
         </label>
         <textarea
           value={context}
           onChange={(e) => setContext(e.target.value)}
-                  placeholder="e.g. dig into the recurring car door issues, general overview of recent failures..."
+                  placeholder="e.g. change diagnostic period, dig into the recurring car door issues, general overview of recent failures..."
                   className="w-full p-3 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
           rows={3}
         />
@@ -1833,8 +1864,29 @@ export default function Home() {
                 {diagnosticResult.analysis?.executiveSummary && (
                   <div className="mb-12">
                     {/* Section Header */}
-                    <div className="mb-6 rounded-lg p-5" style={{ backgroundColor: 'rgba(115, 161, 255, 0.15)' }}>
+                    <div className="mb-6 rounded-lg p-5 flex items-center justify-between" style={{ backgroundColor: 'rgba(115, 161, 255, 0.15)' }}>
                       <h3 className="text-xl font-semibold text-gray-900">Operational Summary</h3>
+                      <button
+                        onClick={handleCopyOperationalSummary}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:text-gray-900 hover:bg-white/50 rounded transition-colors"
+                        title="Copy Operational Summary"
+                      >
+                        {copiedSection === 'operational' ? (
+                          <>
+                            <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span className="text-green-600 font-medium">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                     
                     {typeof diagnosticResult.analysis.executiveSummary === 'object' ? (

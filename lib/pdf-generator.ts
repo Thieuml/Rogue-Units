@@ -1,5 +1,5 @@
 /**
- * PDF generation service for diagnostic summaries
+ * PDF generation service for diagnostic summaries - Analysis Tab Only
  */
 
 import PDFDocument from 'pdfkit'
@@ -18,7 +18,7 @@ export async function generatePDFBuffer(
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
     const doc = new PDFDocument({ 
-      margin: 50,
+      margin: 60,
       size: 'A4',
     })
     
@@ -47,7 +47,7 @@ export async function generatePDF(
     }
     
     const doc = new PDFDocument({ 
-      margin: 50,
+      margin: 60,
       size: 'A4',
     })
     const stream = fs.createWriteStream(outputPath)
@@ -67,32 +67,23 @@ export async function generatePDF(
 }
 
 /**
- * Generate PDF content (shared between buffer and file generation)
+ * Generate PDF content - Analysis Tab Only
  */
 function generatePDFContent(
   doc: PDFDocumentType,
   data: DiagnosticData,
-  analysis: DiagnosticAnalysis
+  analysis: any
 ): void {
-  // Ensure analysis has required fields
+  
   if (!analysis) {
     throw new Error('Analysis data is required for PDF generation')
   }
   
-  // Ensure required fields exist with defaults
-  const safeAnalysis = {
-    executiveSummary: analysis.executiveSummary || 'No summary available',
-    repeatedPatterns: analysis.repeatedPatterns || [],
-    hypotheses: analysis.hypotheses || [],
-    suggestedChecks: analysis.suggestedChecks || [],
-    confidenceLevel: (analysis.confidenceLevel || 'medium') as 'low' | 'medium' | 'high',
-    partsReplaced: analysis.partsReplaced || [],
-  }
-  
   const pageWidth = doc.page.width
   const pageHeight = doc.page.height
-  const margin = 50
-  const headerHeight = 80
+  const margin = 60
+  const contentWidth = pageWidth - 2 * margin
+  const headerHeight = 100
   const footerHeight = 60
   const contentTop = headerHeight + 20
   const contentBottom = pageHeight - footerHeight
@@ -110,12 +101,12 @@ function generatePDFContent(
     
     // Logo text (WeMaintain)
     doc.fillColor('#ffffff')
-    doc.fontSize(24).font('Helvetica-Bold')
-    doc.text('WeMaintain', margin, 25, { align: 'left' })
+    doc.fontSize(28).font('Helvetica-Bold')
+    doc.text('WeMaintain', margin, 30, { align: 'left' })
     
     // Title
-    doc.fontSize(18).font('Helvetica-Bold')
-    doc.text('Lift Diagnostic Summary', margin, 50, { align: 'left' })
+    doc.fontSize(20).font('Helvetica-Bold')
+    doc.text('Lift Diagnostic Analysis', margin, 60, { align: 'left' })
     
     doc.restore()
   }
@@ -125,15 +116,10 @@ function generatePDFContent(
     doc.save()
     const footerY = pageHeight - footerHeight
     
-    // Footer background
-    doc.rect(0, footerY, pageWidth, footerHeight)
-      .fillColor('#f8fafc') // gray-50
-      .fill()
-    
     // Footer line
     doc.moveTo(margin, footerY)
       .lineTo(pageWidth - margin, footerY)
-      .strokeColor('#e2e8f0')
+      .strokeColor('#cbd5e1')
       .lineWidth(1)
       .stroke()
     
@@ -161,9 +147,9 @@ function generatePDFContent(
     // Page number
     doc.text(
       `Page ${doc.bufferedPageRange().start + 1}`,
-      pageWidth - margin,
+      pageWidth - margin - 50,
       footerY + 15,
-      { align: 'right' }
+      { align: 'right', width: 50 }
     )
     
     doc.restore()
@@ -179,504 +165,395 @@ function generatePDFContent(
     }
   }
   
-  // Helper function to add vertical space
-  const addSpace = (height: number): void => {
-    currentY += height
-    // Don't check for page break here - let the caller do it if needed
+  // Helper function to add text with automatic pagination
+  const addText = (text: string, fontSize: number, font: string, color: string, options: any = {}): void => {
+    const textHeight = doc.heightOfString(text, {
+      width: options.width || contentWidth,
+      lineGap: options.lineGap || 4,
+    })
+    
+    ensureSpace(textHeight + (options.marginBottom || 0))
+    
+    doc.fontSize(fontSize).font(font).fillColor(color)
+    doc.text(text, {
+      x: options.x || margin,
+      y: currentY,
+      width: options.width || contentWidth,
+      lineGap: options.lineGap || 4,
+      align: options.align || 'left',
+    })
+    
+    currentY += textHeight + (options.marginBottom || 0)
   }
   
   // Initial header
   addHeader()
   
   // Unit Information Box
-  ensureSpace(70)
-  doc.rect(margin, currentY, pageWidth - 2 * margin, 60)
+  ensureSpace(80)
+  doc.roundedRect(margin, currentY, contentWidth, 70, 5)
     .fillColor('#f1f5f9') // slate-100
     .fill()
     .strokeColor('#cbd5e1')
     .lineWidth(1)
     .stroke()
   
-  doc.fillColor('#0f172a') // slate-900
-  doc.fontSize(16).font('Helvetica-Bold')
-  doc.text(`Unit: ${data.unitName}`, margin + 10, currentY + 10)
-  
-  doc.fontSize(12).font('Helvetica')
-  doc.fillColor('#475569') // slate-600
-  doc.text(`Building: ${data.buildingName}`, margin + 10, currentY + 30)
-  doc.text(`Unit ID: ${data.unitId}`, margin + 10, currentY + 45)
-  
-  currentY += 80
-  ensureSpace(0)
-  
-  // Executive Summary
-  ensureSpace(100)
   doc.fillColor('#0f172a')
   doc.fontSize(18).font('Helvetica-Bold')
-  doc.text('Summary', margin, currentY)
-  currentY += 25
-  ensureSpace(50)
+  doc.text(`Unit: ${data.unitName}`, margin + 15, currentY + 15)
   
-  doc.fillColor('#334155') // slate-700
-  doc.fontSize(11).font('Helvetica')
-  const summaryText = safeAnalysis.executiveSummary
-  const summaryLines = doc.heightOfString(summaryText, {
-    width: pageWidth - 2 * margin,
-    lineGap: 4,
-  })
-  ensureSpace(summaryLines + 20)
-  doc.text(summaryText, {
-    x: margin,
-    y: currentY,
-    align: 'left',
-    lineGap: 4,
-    width: pageWidth - 2 * margin,
-  })
-  currentY += summaryLines + 15
+  doc.fontSize(12).font('Helvetica')
+  doc.fillColor('#475569')
+  doc.text(`Building: ${data.buildingName}`, margin + 15, currentY + 38)
+  doc.text(`Unit ID: ${data.unitId}`, margin + 15, currentY + 53)
   
-  // Confidence Level Badge
-  if (safeAnalysis.confidenceLevel) {
-    ensureSpace(35)
-    const confidenceColor = getConfidenceColor(safeAnalysis.confidenceLevel)
-    doc.rect(margin, currentY, 200, 25)
-      .fillColor(confidenceColor)
-      .fill()
-    
-    doc.fillColor('#ffffff')
-    doc.fontSize(11).font('Helvetica-Bold')
-    doc.text(
-      `Confidence Level: ${safeAnalysis.confidenceLevel.toUpperCase()}`,
-      margin + 10,
-      currentY + 7
-    )
-    doc.fillColor('#0f172a')
-    currentY += 35
-  }
+  currentY += 90
   
-  // Visit Reports Table
-  if (data.visitReports.length > 0) {
-    ensureSpace(100)
-    
-    doc.fillColor('#0f172a')
-    doc.fontSize(18).font('Helvetica-Bold')
-    doc.text(`Visit Reports (${data.visitReports.length})`, margin, currentY)
-    currentY += 25
-    ensureSpace(30)
-    
-    const colWidths = {
-      date: 90,
-      engineer: 100,
-      type: 80,
-      status: 80,
-      comment: pageWidth - 2 * margin - 350,
-    }
-    
-    // Table header
-    ensureSpace(30)
-    doc.fillColor('#1e293b') // slate-800
-    doc.rect(margin, currentY, pageWidth - 2 * margin, 25)
-      .fill()
-    
-    doc.fillColor('#ffffff')
-    doc.fontSize(9).font('Helvetica-Bold')
-    doc.text('Date', margin + 5, currentY + 8)
-    doc.text('Engineer', margin + colWidths.date + 5, currentY + 8)
-    doc.text('Type', margin + colWidths.date + colWidths.engineer + 5, currentY + 8)
-    doc.text('Status', margin + colWidths.date + colWidths.engineer + colWidths.type + 5, currentY + 8)
-    doc.text('Comment', margin + colWidths.date + colWidths.engineer + colWidths.type + colWidths.status + 5, currentY + 8)
-    
-    currentY += 25
-    
-    // Table rows
-    data.visitReports.forEach((visit: any, index: number) => {
-      // Find maintenance issues for this visit
-      const visitIssues = data.maintenanceIssues?.filter((issue: any) => {
-        const visitDate = visit.date || visit.completedDate
-        const issueDate = issue.completedDate
-        if (visitDate && issueDate) {
-        const visitDateStr = typeof visitDate === 'string' && visitDate.length >= 10 ? visitDate.substring(0, 10) : String(visitDate)
-        const issueDateStr = typeof issueDate === 'string' && issueDate.length >= 10 ? issueDate.substring(0, 10) : String(issueDate)
-        const visitType = visit.type ? String(visit.type).toUpperCase() : ''
-        const issueType = issue.type ? String(issue.type).toUpperCase() : ''
-        return visitDateStr === issueDateStr && 
-               (visitType === issueType || 
-                issueType.includes('REGULAR') || 
-                issueType.includes('QUARTERLY') ||
-                issueType.includes('SEMI_ANNUAL'))
-        }
-        return false
-      }) || []
-      
-      const rowHeight = visitIssues.length > 0 ? 25 + (Math.min(visitIssues.length, 3) * 8) + 5 : 25
-      ensureSpace(rowHeight)
-      
-      // Row background (alternating)
-      if (index % 2 === 0) {
-        doc.rect(margin, currentY, pageWidth - 2 * margin, rowHeight)
-          .fillColor('#f8fafc') // gray-50
-          .fill()
-      }
-      
-      // Row border
-      doc.rect(margin, currentY, pageWidth - 2 * margin, rowHeight)
-        .strokeColor('#e2e8f0')
-        .lineWidth(0.5)
-        .stroke()
-      
-      // Date
-      doc.fontSize(8).font('Helvetica')
-      doc.fillColor('#334155')
-      const dateStr = visit.date || visit.completedDate || 'N/A'
-      const dateDisplay = typeof dateStr === 'string' && dateStr.length > 10 ? dateStr.substring(0, 10) : dateStr
-      doc.text(dateDisplay, margin + 5, currentY + 8, { width: colWidths.date - 10 })
-      
-      // Engineer
-      const engineerName = visit.engineer || visit.fullName || 'N/A'
-      const engineerDisplay = typeof engineerName === 'string' ? engineerName.substring(0, 15) : String(engineerName)
-      doc.text(engineerDisplay, margin + colWidths.date + 5, currentY + 8, { width: colWidths.engineer - 10 })
-      
-      // Type with color
-      const typeValue = visit.type || 'N/A'
-      const typeStr = typeof typeValue === 'string' ? typeValue.toUpperCase() : String(typeValue).toUpperCase()
-      const isBreakdown = typeStr.includes('BREAKDOWN') || typeStr.includes('CALLOUT')
-      const isRegular = typeStr.includes('REGULAR') || typeStr.includes('MAINTENANCE')
-      
-      doc.rect(margin + colWidths.date + colWidths.engineer + 5, currentY + 4, colWidths.type - 10, 17)
-        .fillColor(isBreakdown ? '#fee2e2' : isRegular ? '#dbeafe' : '#f3f4f6')
-        .fill()
-      
-      doc.fillColor(isBreakdown ? '#991b1b' : isRegular ? '#1e40af' : '#374151')
-      doc.fontSize(7).font('Helvetica-Bold')
-      doc.text(typeStr.substring(0, 8), margin + colWidths.date + colWidths.engineer + 8, currentY + 9, { width: colWidths.type - 16 })
-      
-      // Status with color
-      const statusValue = visit.endStatus || 'N/A'
-      const statusStr = typeof statusValue === 'string' ? statusValue : String(statusValue)
-      const isWorking = statusStr.toLowerCase().includes('in_service') || statusStr.toLowerCase().includes('working')
-      
-      doc.rect(margin + colWidths.date + colWidths.engineer + colWidths.type + 5, currentY + 4, colWidths.status - 10, 17)
-        .fillColor(isWorking ? '#dcfce7' : '#fef3c7')
-        .fill()
-      
-      doc.fillColor(isWorking ? '#166534' : '#92400e')
-      doc.fontSize(7).font('Helvetica-Bold')
-      doc.text(statusStr.substring(0, 10), margin + colWidths.date + colWidths.engineer + colWidths.type + 8, currentY + 9, { width: colWidths.status - 16 })
-      
-      // Comment
-      doc.fillColor('#475569')
-      doc.fontSize(7).font('Helvetica')
-      const commentText = visit.comment || visit.globalComment || 'N/A'
-      const comment = typeof commentText === 'string' ? commentText.substring(0, 60) : String(commentText)
-      doc.text(comment, margin + colWidths.date + colWidths.engineer + colWidths.type + colWidths.status + 5, currentY + 8, { 
-        width: colWidths.comment - 10,
-        ellipsis: true
-      })
-      
-      // Maintenance issues below row
-      if (visitIssues.length > 0) {
-        doc.fillColor('#f59e0b') // orange-500
-        doc.fontSize(6).font('Helvetica-Bold')
-        doc.text('Issues:', margin + colWidths.date + colWidths.engineer + 5, currentY + 25)
-        
-        visitIssues.slice(0, 3).forEach((issue: any, issueIdx: number) => {
-          doc.fillColor('#92400e') // orange-800
-          doc.fontSize(6).font('Helvetica')
-          const issueText = `${issue.stateKey || 'Component'}${issue.problemKey ? ': ' + issue.problemKey : ''}`
-          const issueDisplay = typeof issueText === 'string' ? issueText.substring(0, 50) : String(issueText)
-          doc.text(issueDisplay, margin + colWidths.date + colWidths.engineer + 25, currentY + 25 + (issueIdx * 8), {
-            width: colWidths.comment + colWidths.status + colWidths.type - 20,
-            ellipsis: true
-          })
-        })
-        
-        if (visitIssues.length > 3) {
-          doc.fillColor('#64748b')
-          doc.fontSize(6).font('Helvetica')
-          doc.text(`+${visitIssues.length - 3} more`, margin + colWidths.date + colWidths.engineer + 25, currentY + 25 + (3 * 8))
-        }
-      }
-      
-      currentY += rowHeight
-    })
-    
-    currentY += 10
-  }
-  
-  // Breakdowns Table
-  if (data.breakdowns && data.breakdowns.length > 0) {
-    ensureSpace(100)
-    
-    doc.fillColor('#0f172a')
-    doc.fontSize(18).font('Helvetica-Bold')
-    doc.text(`Breakdowns / Downtimes (${data.breakdowns.length})`, margin, currentY)
-    currentY += 25
-    ensureSpace(30)
-    
-    const breakdownColWidths = {
-      startDate: 80,
-      endDate: 80,
-      duration: 60,
-      origin: 90,
-      component: 90,
-      visited: 40,
-      status: pageWidth - 2 * margin - 440,
-    }
-    
-    // Table header
-    ensureSpace(30)
-    doc.fillColor('#dc2626') // red-600
-    doc.rect(margin, currentY, pageWidth - 2 * margin, 25)
-      .fill()
-    
-    doc.fillColor('#ffffff')
-    doc.fontSize(9).font('Helvetica-Bold')
-    doc.text('Start', margin + 5, currentY + 8)
-    doc.text('End', margin + breakdownColWidths.startDate + 5, currentY + 8)
-    doc.text('Duration', margin + breakdownColWidths.startDate + breakdownColWidths.endDate + 5, currentY + 8)
-    doc.text('Origin', margin + breakdownColWidths.startDate + breakdownColWidths.endDate + breakdownColWidths.duration + 5, currentY + 8)
-    doc.text('Component', margin + breakdownColWidths.startDate + breakdownColWidths.endDate + breakdownColWidths.duration + breakdownColWidths.origin + 5, currentY + 8)
-    doc.text('Visited', margin + breakdownColWidths.startDate + breakdownColWidths.endDate + breakdownColWidths.duration + breakdownColWidths.origin + breakdownColWidths.component + 5, currentY + 8)
-    doc.text('Status', margin + breakdownColWidths.startDate + breakdownColWidths.endDate + breakdownColWidths.duration + breakdownColWidths.origin + breakdownColWidths.component + breakdownColWidths.visited + 5, currentY + 8)
-    
-    currentY += 25
-    
-    // Table rows
-    data.breakdowns.forEach((bd: any, index: number) => {
-      const rowHeight = bd.publicComment ? 35 : 30
-      ensureSpace(rowHeight)
-      
-      // Row background (alternating, red tint for ongoing)
-      if (bd.isOngoing) {
-        doc.rect(margin, currentY, pageWidth - 2 * margin, rowHeight)
-          .fillColor('#fef2f2') // red-50
-          .fill()
-      } else if (index % 2 === 0) {
-        doc.rect(margin, currentY, pageWidth - 2 * margin, rowHeight)
-          .fillColor('#fff7ed') // orange-50
-          .fill()
-      }
-      
-      // Row border
-      doc.rect(margin, currentY, pageWidth - 2 * margin, rowHeight)
-        .strokeColor(bd.isOngoing ? '#dc2626' : '#fb923c')
-        .lineWidth(bd.isOngoing ? 1.5 : 0.5)
-        .stroke()
-      
-      // Start date
-      doc.fontSize(8).font('Helvetica')
-      doc.fillColor('#334155')
-      const startDate = bd.startTime ? new Date(bd.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'
-      doc.text(startDate, margin + 5, currentY + 8, { width: breakdownColWidths.startDate - 10 })
-      
-      // End date
-      const endDate = bd.endTime ? new Date(bd.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'ONGOING'
-      doc.fillColor(bd.isOngoing ? '#dc2626' : '#334155')
-      doc.font('Helvetica-Bold')
-      doc.text(endDate, margin + breakdownColWidths.startDate + 5, currentY + 8, { width: breakdownColWidths.endDate - 10 })
-      
-      // Duration
-      doc.font('Helvetica')
-      doc.fillColor('#334155')
-      const duration = bd.minutesDuration
-        ? `${Math.floor(bd.minutesDuration / 60)}h ${bd.minutesDuration % 60}m`
-        : 'N/A'
-      doc.text(duration, margin + breakdownColWidths.startDate + breakdownColWidths.endDate + 5, currentY + 8, { width: breakdownColWidths.duration - 10 })
-      
-      // Origin
-      const originValue = bd.origin || 'N/A'
-      const originDisplay = typeof originValue === 'string' ? originValue.substring(0, 20) : String(originValue)
-      doc.text(originDisplay, margin + breakdownColWidths.startDate + breakdownColWidths.endDate + breakdownColWidths.duration + 5, currentY + 8, { 
-        width: breakdownColWidths.origin - 10,
-        ellipsis: true
-      })
-      
-      // Component
-      const failureLocationsValue = bd.failureLocations || 'N/A'
-      const failureLocationsDisplay = typeof failureLocationsValue === 'string' ? failureLocationsValue.substring(0, 20) : String(failureLocationsValue)
-      doc.text(failureLocationsDisplay, margin + breakdownColWidths.startDate + breakdownColWidths.endDate + breakdownColWidths.duration + breakdownColWidths.origin + 5, currentY + 8, {
-        width: breakdownColWidths.component - 10,
-        ellipsis: true
-      })
-      
-      // Visited
-      doc.fillColor(bd.visitedDuringBreakdown ? '#16a34a' : '#64748b')
-      doc.font('Helvetica-Bold')
-      doc.text(bd.visitedDuringBreakdown ? '✓' : '-', margin + breakdownColWidths.startDate + breakdownColWidths.endDate + breakdownColWidths.duration + breakdownColWidths.origin + breakdownColWidths.component + 5, currentY + 8, {
-        width: breakdownColWidths.visited - 10,
-        align: 'center'
-      })
-      
-      // Status
-      doc.font('Helvetica')
-      doc.fillColor('#334155')
-      const internalStatusValue = bd.internalStatus || 'N/A'
-      const internalStatusDisplay = typeof internalStatusValue === 'string' ? internalStatusValue.substring(0, 30) : String(internalStatusValue)
-      doc.text(internalStatusDisplay, margin + breakdownColWidths.startDate + breakdownColWidths.endDate + breakdownColWidths.duration + breakdownColWidths.origin + breakdownColWidths.component + breakdownColWidths.visited + 5, currentY + 8, {
-        width: breakdownColWidths.status - 10,
-        ellipsis: true
-      })
-      
-      // Public comment on second line if available
-      if (bd.publicComment) {
-        doc.fontSize(7).font('Helvetica')
-        doc.fillColor('#64748b')
-        const publicCommentDisplay = typeof bd.publicComment === 'string' ? bd.publicComment.substring(0, 100) : String(bd.publicComment)
-        doc.text(publicCommentDisplay, margin + breakdownColWidths.startDate + breakdownColWidths.endDate + breakdownColWidths.duration + 5, currentY + 18, {
-          width: pageWidth - 2 * margin - breakdownColWidths.startDate - breakdownColWidths.endDate - breakdownColWidths.duration - 10,
-          ellipsis: true
-        })
-      }
-      
-      currentY += rowHeight
-    })
-    
-    currentY += 10
-  }
-  
-  // Repeated Patterns
-  if (safeAnalysis.repeatedPatterns && safeAnalysis.repeatedPatterns.length > 0) {
-    ensureSpace(80)
-    
-    doc.fillColor('#0f172a')
-    doc.fontSize(18).font('Helvetica-Bold')
-    doc.text('Repeated Patterns', margin, currentY)
-    currentY += 25
+  // Executive Summary (if present)
+  if (analysis.finalExecSummary) {
     ensureSpace(60)
     
-    safeAnalysis.repeatedPatterns.forEach((pattern) => {
+    // Section banner
+    doc.roundedRect(margin, currentY, contentWidth, 35, 5)
+      .fillColor('#eff6ff') // blue-50
+      .fill()
+      .strokeColor('#93c5fd')
+      .lineWidth(1)
+      .stroke()
+    
+    doc.fillColor('#1e293b')
+    doc.fontSize(16).font('Helvetica-Bold')
+    doc.text('Executive Summary', margin + 15, currentY + 10)
+    
+    currentY += 45
+    
+    // Summary content
+    addText(
+      analysis.finalExecSummary.replace(/at Unit /gi, '').replace(/at /gi, ''),
+      11,
+      'Helvetica',
+      '#334155',
+      { marginBottom: 20, lineGap: 5 }
+    )
+  }
+  
+  // Operational Summary
+  if (analysis.executiveSummary) {
+    ensureSpace(60)
+    
+    // Section banner
+    doc.roundedRect(margin, currentY, contentWidth, 35, 5)
+      .fillColor('rgba(115, 161, 255, 0.15)')
+      .fill()
+      .strokeColor('#73A1FF')
+      .lineWidth(1.5)
+      .stroke()
+    
+    doc.fillColor('#1e293b')
+    doc.fontSize(16).font('Helvetica-Bold')
+    doc.text('Operational Summary', margin + 15, currentY + 10)
+    
+    currentY += 50
+    
+    if (typeof analysis.executiveSummary === 'object') {
+      // Overview
+      if (analysis.executiveSummary.overview) {
+        ensureSpace(40)
+        doc.fontSize(14).font('Helvetica-Bold').fillColor('#1e293b')
+        doc.text('Overview', margin, currentY)
+        currentY += 20
+        
+        addText(
+          analysis.executiveSummary.overview.replace(/at Unit /gi, '').replace(/at /gi, ''),
+          11,
+          'Helvetica',
+          '#334155',
+          { marginBottom: 20, lineGap: 5 }
+        )
+      }
+      
+      // Summary of Events
+      if (analysis.executiveSummary.summaryOfEvents) {
+        ensureSpace(40)
+        doc.fontSize(14).font('Helvetica-Bold').fillColor('#1e293b')
+        doc.text('Summary of Events', margin, currentY)
+        currentY += 20
+        
+        addText(
+          analysis.executiveSummary.summaryOfEvents.replace(/at Unit /gi, '').replace(/at /gi, ''),
+          11,
+          'Helvetica',
+          '#334155',
+          { marginBottom: 20, lineGap: 5 }
+        )
+      }
+      
+      // Current Situation
+      if (analysis.executiveSummary.currentSituation) {
+        ensureSpace(40)
+        doc.fontSize(14).font('Helvetica-Bold').fillColor('#1e293b')
+        doc.text('Current Situation and Next Steps', margin, currentY)
+        currentY += 20
+        
+        addText(
+          analysis.executiveSummary.currentSituation.replace(/at Unit /gi, '').replace(/at /gi, ''),
+          11,
+          'Helvetica',
+          '#334155',
+          { marginBottom: 20, lineGap: 5 }
+        )
+      }
+    } else {
+      addText(
+        analysis.executiveSummary.replace(/at Unit /gi, '').replace(/at /gi, ''),
+        11,
+        'Helvetica',
+        '#334155',
+        { marginBottom: 20, lineGap: 5 }
+      )
+    }
+  }
+  
+  // Technical Summary
+  if (analysis.technicalSummary) {
+    ensureSpace(60)
+    
+    // Section banner
+    doc.roundedRect(margin, currentY, contentWidth, 35, 5)
+      .fillColor('rgba(109, 112, 156, 0.15)')
+      .fill()
+      .strokeColor('#6D709C')
+      .lineWidth(1.5)
+      .stroke()
+    
+    doc.fillColor('#1e293b')
+    doc.fontSize(16).font('Helvetica-Bold')
+    doc.text('Technical Summary', margin + 15, currentY + 10)
+    
+    currentY += 50
+    
+    // Overview
+    if (analysis.technicalSummary.overview) {
+      addText(
+        analysis.technicalSummary.overview,
+        11,
+        'Helvetica',
+        '#334155',
+        { marginBottom: 20, lineGap: 5 }
+      )
+    }
+    
+    // Pattern Details
+    if (analysis.technicalSummary.patternDetails && analysis.technicalSummary.patternDetails.length > 0) {
+      analysis.technicalSummary.patternDetails.forEach((pattern: any, idx: number) => {
+        ensureSpace(80)
+        
+        // Pattern card with top border
+        const patternStartY = currentY
+        
+        // Calculate total content height first (for the box)
+        let estimatedHeight = 40 // Pattern name
+        estimatedHeight += doc.heightOfString(pattern.verdict, { width: contentWidth - 30, lineGap: 4 }) + 20
+        
+        if (pattern.quantifiedImpact) estimatedHeight += 70
+        if (pattern.driverTree) estimatedHeight += 60
+        if (pattern.actionableRecommendations) estimatedHeight += pattern.actionableRecommendations.length * 45
+        if (pattern.resolutionProbability) estimatedHeight += 40
+        
+        ensureSpace(estimatedHeight)
+        
+        // Draw pattern box background
+        doc.roundedRect(margin, patternStartY, contentWidth, estimatedHeight, 5)
+          .fillColor('rgba(109, 112, 156, 0.05)')
+          .fill()
+        
+        // Draw top border
+        doc.rect(margin, patternStartY, contentWidth, 3)
+          .fillColor('#6D709C')
+          .fill()
+        
+        // Pattern Name
+        doc.fontSize(14).font('Helvetica-Bold').fillColor('#1e293b')
+        doc.text(pattern.patternName, margin + 15, currentY + 15, { width: contentWidth - 30 })
+        currentY += 40
+        
+        // Verdict
+        doc.fontSize(11).font('Helvetica').fillColor('#334155')
+        const verdictHeight = doc.heightOfString(pattern.verdict, { width: contentWidth - 30, lineGap: 4 })
+        doc.text(pattern.verdict, margin + 15, currentY, { width: contentWidth - 30, lineGap: 4 })
+        currentY += verdictHeight + 20
+        
+        // Quantified Impact
+        if (pattern.quantifiedImpact) {
+          doc.fontSize(12).font('Helvetica-Bold').fillColor('#1e293b')
+          doc.text('Quantified Impact', margin + 15, currentY)
+          currentY += 18
+          
+          doc.fontSize(10).font('Helvetica').fillColor('#334155')
+          doc.text(`Breakdowns: ${pattern.quantifiedImpact.breakdownCount} over ${pattern.quantifiedImpact.timeSpan}`, margin + 15, currentY)
+          currentY += 15
+          doc.text(`Downtime: ${pattern.quantifiedImpact.downtimeHours} total (${pattern.quantifiedImpact.downtimePerEvent} per event)`, margin + 15, currentY)
+          currentY += 15
+          
+          // Risk level badge
+          const riskLevel = pattern.quantifiedImpact.riskLevel.toLowerCase()
+          const riskColor = riskLevel === 'high' ? '#dc2626' : riskLevel === 'medium' ? '#f59e0b' : '#16a34a'
+          const riskBgColor = riskLevel === 'high' ? '#fee2e2' : riskLevel === 'medium' ? '#fef3c7' : '#dcfce7'
+          
+          doc.roundedRect(margin + 15, currentY, 100, 18, 9)
+            .fillColor(riskBgColor)
+            .fill()
+          
+          doc.fontSize(9).font('Helvetica-Bold').fillColor(riskColor)
+          doc.text(`RISK: ${pattern.quantifiedImpact.riskLevel.toUpperCase()}`, margin + 25, currentY + 5, { width: 80, align: 'center' })
+          
+          doc.fontSize(10).font('Helvetica').fillColor('#334155')
+          doc.text(` - ${pattern.quantifiedImpact.riskRationale}`, margin + 120, currentY + 3)
+          currentY += 30
+        }
+        
+        // Root Cause Analysis
+        if (pattern.driverTree) {
+          doc.fontSize(12).font('Helvetica-Bold').fillColor('#1e293b')
+          doc.text('Root Cause Analysis', margin + 15, currentY)
+          currentY += 18
+          
+          doc.fontSize(10).font('Helvetica').fillColor('#334155')
+          const driverText = pattern.driverTree.replace(/^Defective materials? →?\s*/i, '').replace(/^Defective materials? and \w+ →?\s*/i, '')
+          const driverHeight = doc.heightOfString(driverText, { width: contentWidth - 30, lineGap: 4 })
+          doc.text(driverText, margin + 15, currentY, { width: contentWidth - 30, lineGap: 4 })
+          currentY += driverHeight + 20
+        }
+        
+        // Actionable Recommendations
+        if (pattern.actionableRecommendations && pattern.actionableRecommendations.length > 0) {
+          doc.fontSize(12).font('Helvetica-Bold').fillColor('#1e293b')
+          doc.text('Actionable Recommendations', margin + 15, currentY)
+          currentY += 18
+          
+          pattern.actionableRecommendations.forEach((rec: any, recIdx: number) => {
+            // Number badge
+            doc.circle(margin + 22, currentY + 5, 8)
+              .fillColor('#6D709C')
+              .fill()
+            
+            doc.fontSize(9).font('Helvetica-Bold').fillColor('#ffffff')
+            doc.text(String(recIdx + 1), margin + 18, currentY + 2, { width: 8, align: 'center' })
+            
+            // Recommendation text
+            doc.fontSize(10).font('Helvetica-Bold').fillColor('#1e293b')
+            const actionHeight = doc.heightOfString(rec.action, { width: contentWidth - 50, lineGap: 3 })
+            doc.text(rec.action, margin + 35, currentY, { width: contentWidth - 50, lineGap: 3 })
+            currentY += actionHeight + 3
+            
+            doc.fontSize(9).font('Helvetica').fillColor('#64748b')
+            doc.text(`Timeframe: ${rec.timeframe.replace(/_/g, ' ')} • Expected: ${rec.expectedOutcome}`, margin + 35, currentY, { width: contentWidth - 50 })
+            currentY += 25
+          })
+          
+          currentY += 10
+        }
+        
+        // Resolution Probability
+        if (pattern.resolutionProbability) {
+          doc.fontSize(12).font('Helvetica-Bold').fillColor('#1e293b')
+          doc.text('Probability of Resolution', margin + 15, currentY)
+          currentY += 18
+          
+          doc.fontSize(10).font('Helvetica').fillColor('#334155')
+          doc.text(`Success Rate: ${pattern.resolutionProbability.probability}`, margin + 15, currentY)
+          currentY += 15
+          
+          doc.text(`If issue persists: ${pattern.resolutionProbability.escalationPath}`, margin + 15, currentY, { width: contentWidth - 30, lineGap: 4 })
+          currentY += 20
+        }
+        
+        currentY += 15 // Space after pattern card
+      })
+    }
+  }
+  
+  // Fallback: Repeated Patterns (if Technical Summary not available)
+  if (!analysis.technicalSummary && analysis.repeatedPatterns && analysis.repeatedPatterns.length > 0) {
+    ensureSpace(60)
+    
+    // Section banner
+    doc.roundedRect(margin, currentY, contentWidth, 35, 5)
+      .fillColor('rgba(251, 191, 36, 0.15)')
+      .fill()
+      .strokeColor('#fbbf24')
+      .lineWidth(1.5)
+      .stroke()
+    
+    doc.fillColor('#1e293b')
+    doc.fontSize(16).font('Helvetica-Bold')
+    doc.text('Repeated Patterns', margin + 15, currentY + 10)
+    
+    currentY += 50
+    
+    analysis.repeatedPatterns.forEach((pattern: any) => {
       ensureSpace(60)
       
-      // Pattern box
-      doc.rect(margin, currentY, pageWidth - 2 * margin, 50)
-        .fillColor('#fef3c7') // yellow-100
-        .fill()
-        .strokeColor('#fbbf24')
-        .lineWidth(1)
-        .stroke()
+      doc.fontSize(12).font('Helvetica-Bold').fillColor('#92400e')
+      doc.text(`${pattern.pattern} (${pattern.frequency} occurrences)`, margin, currentY)
+      currentY += 18
       
-      doc.fillColor('#92400e') // yellow-800
-      doc.fontSize(11).font('Helvetica-Bold')
-      doc.text(`${pattern.pattern} (${pattern.frequency} occurrences)`, margin + 10, currentY + 8)
-      
-      doc.fillColor('#78350f') // yellow-900
-      doc.fontSize(9).font('Helvetica')
-      if (pattern.examples && pattern.examples.length > 0) {
-        pattern.examples.slice(0, 2).forEach((example: any, idx: number) => {
-          const exampleText = typeof example === 'string' ? example.substring(0, 80) : String(example)
-          doc.text(`• ${exampleText}`, margin + 15, currentY + 22 + (idx * 12), {
-            width: pageWidth - 2 * margin - 30,
-            ellipsis: true
-          })
-        })
+      if (pattern.summary) {
+        addText(pattern.summary, 10, 'Helvetica', '#334155', { marginBottom: 10 })
       }
       
-      currentY += 60
+      if (pattern.rootCause) {
+        doc.fontSize(10).font('Helvetica-Bold').fillColor('#1e293b')
+        doc.text('Root Cause: ', margin, currentY, { continued: true })
+        doc.font('Helvetica')
+        doc.text(pattern.rootCause)
+        currentY += 15
+      }
+      
+      if (pattern.impact) {
+        doc.fontSize(10).font('Helvetica-Bold').fillColor('#1e293b')
+        doc.text('Impact: ', margin, currentY, { continued: true })
+        doc.font('Helvetica')
+        doc.text(pattern.impact)
+        currentY += 15
+      }
+      
+      currentY += 15
     })
-    
-    currentY += 10
   }
   
-  // Hypotheses
-  if (safeAnalysis.hypotheses && safeAnalysis.hypotheses.length > 0) {
-    ensureSpace(80)
-    
-    doc.fillColor('#0f172a')
-    doc.fontSize(18).font('Helvetica-Bold')
-    doc.text('Likely Causes', margin, currentY)
-    currentY += 25
+  // Fallback: Likely Causes (if Technical Summary not available)
+  if (!analysis.technicalSummary && analysis.hypotheses && analysis.hypotheses.length > 0) {
     ensureSpace(60)
     
-    safeAnalysis.hypotheses.forEach((hypothesis) => {
-      // Calculate actual height needed for reasoning text
-      doc.fontSize(10).font('Helvetica')
-      const reasoningHeight = doc.heightOfString(hypothesis.reasoning, {
-        width: pageWidth - 2 * margin - 20,
-        lineGap: 3,
-      })
-      const boxHeight = 25 + reasoningHeight + 10
-      
-      ensureSpace(boxHeight)
-      
-      // Hypothesis box
-      const likelihoodColor = hypothesis.likelihood === 'high' ? '#dbeafe' : hypothesis.likelihood === 'medium' ? '#fef3c7' : '#fee2e2'
-      const likelihoodBorder = hypothesis.likelihood === 'high' ? '#3b82f6' : hypothesis.likelihood === 'medium' ? '#f59e0b' : '#ef4444'
-      
-      doc.rect(margin, currentY, pageWidth - 2 * margin, boxHeight)
-        .fillColor(likelihoodColor)
-        .fill()
-        .strokeColor(likelihoodBorder)
-        .lineWidth(1.5)
-        .stroke()
-      
-      doc.fillColor('#0f172a')
-      doc.fontSize(12).font('Helvetica-Bold')
-      doc.text(`${hypothesis.category} (${hypothesis.likelihood} likelihood)`, margin + 10, currentY + 8)
-      
-      doc.fillColor('#334155')
-      doc.fontSize(10).font('Helvetica')
-      doc.text(hypothesis.reasoning, {
-        x: margin + 10,
-        y: currentY + 25,
-        width: pageWidth - 2 * margin - 20,
-        lineGap: 3,
-      })
-      
-      currentY += boxHeight
-    })
+    // Section banner
+    doc.roundedRect(margin, currentY, contentWidth, 35, 5)
+      .fillColor('rgba(115, 161, 255, 0.15)')
+      .fill()
+      .strokeColor('#73A1FF')
+      .lineWidth(1.5)
+      .stroke()
     
-    currentY += 10
+    doc.fillColor('#1e293b')
+    doc.fontSize(16).font('Helvetica-Bold')
+    doc.text('Likely Causes', margin + 15, currentY + 10)
+    
+    currentY += 50
+    
+    analysis.hypotheses.forEach((hypothesis: any) => {
+      ensureSpace(50)
+      
+      doc.fontSize(12).font('Helvetica-Bold').fillColor('#1e293b')
+      doc.text(`${hypothesis.category} (${hypothesis.likelihood} likelihood)`, margin, currentY)
+      currentY += 18
+      
+      addText(hypothesis.reasoning, 10, 'Helvetica', '#334155', { marginBottom: 15 })
+    })
   }
   
-  // Suggested Checks
-  if (safeAnalysis.suggestedChecks && safeAnalysis.suggestedChecks.length > 0) {
-    ensureSpace(50)
-    
-    doc.fillColor('#0f172a')
-    doc.fontSize(18).font('Helvetica-Bold')
-    doc.text('Suggested Next Checks', margin, currentY)
-    currentY += 25
-    ensureSpace(20)
-    
-    doc.fillColor('#334155')
-    doc.fontSize(10).font('Helvetica')
-    safeAnalysis.suggestedChecks.forEach((check) => {
-      // Calculate height for this check item
-      const checkHeight = doc.heightOfString(`✓ ${check}`, {
-        width: pageWidth - 2 * margin - 20,
-        lineGap: 2,
-      })
-      
-      ensureSpace(checkHeight + 5)
-      
-      doc.text(`✓ ${check}`, margin + 10, currentY, {
-        width: pageWidth - 2 * margin - 20,
-        lineGap: 2,
-      })
-      currentY += checkHeight + 5
-    })
-    
-    currentY += 10
-  }
-  
-  // Final footer - only add if we have content on this page
+  // Final footer
   if (currentY > contentTop) {
     addFooter()
-  }
-}
-
-/**
- * Get color for confidence level
- */
-function getConfidenceColor(level: 'low' | 'medium' | 'high'): string {
-  switch (level) {
-    case 'high':
-      return '#10b981' // green-500
-    case 'medium':
-      return '#f59e0b' // amber-500
-    case 'low':
-      return '#ef4444' // red-500
-    default:
-      return '#6b7280' // gray-500
   }
 }
 
