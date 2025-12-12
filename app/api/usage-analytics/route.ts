@@ -12,12 +12,23 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET() {
   try {
+    console.log('[Usage Analytics API] Starting request')
+    
     // Check authentication
     const session = await getServerSession(authOptions)
+    console.log('[Usage Analytics API] Session:', { 
+      hasSession: !!session, 
+      email: session?.user?.email,
+      userId: session?.user?.id 
+    })
+    
     if (!session?.user?.email) {
+      console.log('[Usage Analytics API] Unauthorized - no session or email')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    console.log('[Usage Analytics API] Fetching diagnostics from database...')
+    
     // Fetch all diagnostics grouped by userId
     const diagnostics = await prisma.diagnostic.findMany({
       where: {
@@ -35,6 +46,8 @@ export async function GET() {
         generatedAt: 'desc'
       }
     })
+    
+    console.log('[Usage Analytics API] Found diagnostics:', diagnostics.length)
 
     // Group by userId and calculate statistics
     const userStatsMap = new Map<string, {
@@ -87,12 +100,22 @@ export async function GET() {
         : '0'
     }
 
+    console.log('[Usage Analytics API] Returning stats:', {
+      totalUsers: overallStats.totalUsers,
+      totalDiagnostics: overallStats.totalDiagnostics
+    })
+
     return NextResponse.json({
       userStats,
       overallStats
     })
   } catch (error) {
     console.error('[Usage Analytics API] Error:', error)
+    console.error('[Usage Analytics API] Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    })
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
       { error: `Failed to fetch usage analytics: ${errorMessage}` },

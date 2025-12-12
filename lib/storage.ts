@@ -125,24 +125,49 @@ export async function storeDiagnostic(metadata: {
   repairRequests?: any[]
   analysis: any
 }): Promise<string> {
-  const diagnostic = await prisma.diagnostic.create({
-    data: {
+  try {
+    console.log('[Storage] storeDiagnostic called with metadata:', {
       unitId: metadata.unitId,
       unitName: metadata.unitName,
       buildingName: metadata.buildingName,
-      generatedAt: metadata.generatedAt,
       country: metadata.country,
-      userId: metadata.userId ?? null,
-      userName: metadata.userName ?? null,
-      visitReports: metadata.visitReports,
-      breakdowns: metadata.breakdowns,
-      maintenanceIssues: metadata.maintenanceIssues,
-      repairRequests: metadata.repairRequests ?? undefined,
-      analysis: metadata.analysis ?? undefined,
-    },
-  })
-  
-  return diagnostic.id
+      userId: metadata.userId,
+      userName: metadata.userName,
+      visitReportsCount: metadata.visitReports?.length || 0,
+      breakdownsCount: metadata.breakdowns?.length || 0,
+      maintenanceIssuesCount: metadata.maintenanceIssues?.length || 0,
+      hasAnalysis: !!metadata.analysis,
+    })
+    
+    const diagnostic = await prisma.diagnostic.create({
+      data: {
+        unitId: metadata.unitId,
+        unitName: metadata.unitName,
+        buildingName: metadata.buildingName,
+        generatedAt: metadata.generatedAt,
+        country: metadata.country,
+        userId: metadata.userId ?? null,
+        userName: metadata.userName ?? null,
+        visitReports: metadata.visitReports,
+        breakdowns: metadata.breakdowns,
+        maintenanceIssues: metadata.maintenanceIssues,
+        repairRequests: metadata.repairRequests ?? undefined,
+        analysis: metadata.analysis ?? undefined,
+      },
+    })
+    
+    console.log('[Storage] Diagnostic stored successfully with ID:', diagnostic.id)
+    
+    return diagnostic.id
+  } catch (error) {
+    console.error('[Storage] Error in storeDiagnostic:', error)
+    console.error('[Storage] Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    })
+    throw error
+  }
 }
 
 /**
@@ -230,59 +255,75 @@ export async function listStoredDiagnostics(filters?: {
   repairRequests?: any[]
   analysis: any
 }>> {
-  const where: any = {}
-  
-  if (filters?.country) {
-    where.country = filters.country
-  }
-  
-  if (filters?.userId) {
-    where.userId = filters.userId
-  }
-  
-  if (filters?.startDate || filters?.endDate) {
-    where.generatedAt = {}
-    if (filters.startDate) {
-      where.generatedAt.gte = filters.startDate
+  try {
+    console.log('[Storage] listStoredDiagnostics called with filters:', JSON.stringify(filters, null, 2))
+    
+    const where: any = {}
+    
+    if (filters?.country) {
+      where.country = filters.country
     }
-    if (filters.endDate) {
-      where.generatedAt.lte = filters.endDate
+    
+    if (filters?.userId) {
+      where.userId = filters.userId
     }
-  }
-  
-  if (filters?.unitId) {
-    where.unitId = filters.unitId
-  }
-  
-  if (filters?.unitName) {
-    where.unitName = {
-      contains: filters.unitName,
-      mode: 'insensitive',
+    
+    if (filters?.startDate || filters?.endDate) {
+      where.generatedAt = {}
+      if (filters.startDate) {
+        where.generatedAt.gte = filters.startDate
+      }
+      if (filters.endDate) {
+        where.generatedAt.lte = filters.endDate
+      }
     }
+    
+    if (filters?.unitId) {
+      where.unitId = filters.unitId
+    }
+    
+    if (filters?.unitName) {
+      where.unitName = {
+        contains: filters.unitName,
+        mode: 'insensitive',
+      }
+    }
+    
+    console.log('[Storage] Prisma query where clause:', JSON.stringify(where, null, 2))
+    
+    const diagnostics = await prisma.diagnostic.findMany({
+      where,
+      orderBy: {
+        generatedAt: 'desc',
+      },
+    })
+    
+    console.log('[Storage] Found diagnostics:', diagnostics.length)
+    
+    return diagnostics.map(d => ({
+      id: d.id,
+      unitId: d.unitId,
+      unitName: d.unitName,
+      buildingName: d.buildingName,
+      generatedAt: d.generatedAt,
+      country: d.country,
+      userId: d.userId,
+      userName: d.userName,
+      visitReports: d.visitReports as any[],
+      breakdowns: d.breakdowns as any[],
+      maintenanceIssues: d.maintenanceIssues as any[],
+      repairRequests: d.repairRequests as any[] | undefined,
+      analysis: d.analysis as any,
+    }))
+  } catch (error) {
+    console.error('[Storage] Error in listStoredDiagnostics:', error)
+    console.error('[Storage] Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    })
+    throw error
   }
-  
-  const diagnostics = await prisma.diagnostic.findMany({
-    where,
-    orderBy: {
-      generatedAt: 'desc',
-    },
-  })
-  
-  return diagnostics.map(d => ({
-    id: d.id,
-    unitId: d.unitId,
-    unitName: d.unitName,
-    buildingName: d.buildingName,
-    generatedAt: d.generatedAt,
-    country: d.country,
-    userId: d.userId,
-    userName: d.userName,
-    visitReports: d.visitReports as any[],
-    breakdowns: d.breakdowns as any[],
-    maintenanceIssues: d.maintenanceIssues as any[],
-    repairRequests: d.repairRequests as any[] | undefined,
-    analysis: d.analysis as any,
-  }))
 }
 
 /**
