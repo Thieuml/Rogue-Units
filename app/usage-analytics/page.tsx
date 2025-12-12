@@ -41,13 +41,17 @@ export default function UsageAnalyticsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   
   // Initialize country from localStorage or default to FR
-  const [country, setCountryState] = useState<string>(() => {
+  const [country, setCountryState] = useState<string>('FR')
+  
+  // Load saved country from localStorage after mount to avoid hydration mismatch
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('diagnostic-country')
-      return saved || 'FR'
+      if (saved && saved !== country) {
+        setCountryState(saved)
+      }
     }
-    return 'FR'
-  })
+  }, [])
   
   // Wrapper to also save to localStorage
   const setCountry = (newCountry: string) => {

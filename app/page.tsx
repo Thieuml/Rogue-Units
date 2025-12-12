@@ -171,13 +171,17 @@ function getDaysBack(context: string | undefined): number {
 export default function Home() {
   const { data: session } = useSession()
   // Initialize country from localStorage or default to FR
-  const [country, setCountryState] = useState<string>(() => {
+  const [country, setCountryState] = useState<string>('FR')
+  
+  // Load saved country from localStorage after mount to avoid hydration mismatch
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('diagnostic-country')
-      return saved || 'FR'
+      if (saved && saved !== country) {
+        setCountryState(saved)
+      }
     }
-    return 'FR'
-  })
+  }, [])
   
   // Wrapper to persist country changes
   const setCountry = (newCountry: string) => {
@@ -584,9 +588,9 @@ export default function Home() {
   }
   
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="h-screen bg-gray-50 flex overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-800 text-white flex flex-col relative z-10">
+      <aside className="w-64 bg-slate-800 text-white flex flex-col h-screen flex-shrink-0 relative z-10">
         <div className="p-6 border-b border-slate-700">
           <WeMaintainLogo />
         </div>
