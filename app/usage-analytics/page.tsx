@@ -245,21 +245,25 @@ export default function UsageAnalyticsPage() {
 
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg shadow-sm p-6 mb-6">
-              <div className="flex items-center gap-2 text-red-700">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M12 8V12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M12 16H12.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <div className="flex items-start gap-3">
+                <svg className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span className="font-semibold">Error loading analytics</span>
+                <div className="flex-1">
+                  <h3 className="text-base font-semibold text-red-900 mb-1">Unable to load analytics</h3>
+                  <p className="text-sm text-red-700 mb-3">
+                    {error.includes('table') || error.includes('database') 
+                      ? 'The database may not be properly initialized. Please contact support if this persists.' 
+                      : error}
+                  </p>
+                  <button
+                    onClick={fetchAnalytics}
+                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm font-medium"
+                  >
+                    Try Again
+                  </button>
+                </div>
               </div>
-              <p className="text-sm text-red-600 mt-2">{error}</p>
-              <button
-                onClick={fetchAnalytics}
-                className="mt-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm"
-              >
-                Retry
-              </button>
             </div>
           )}
 
@@ -318,7 +322,28 @@ export default function UsageAnalyticsPage() {
                 </div>
               </div>
 
-              {/* User Statistics Table */}
+              {/* Show info message when there's no data at all */}
+              {data.userStats.length === 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-8 mb-6">
+                  <div className="flex items-start gap-4">
+                    <svg className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                      <h3 className="text-base font-semibold text-blue-900 mb-1">No usage data yet</h3>
+                      <p className="text-sm text-blue-700 mb-2">
+                        Analytics will appear here once users start generating diagnostics.
+                      </p>
+                      <p className="text-sm text-blue-600">
+                        To get started, navigate to the main page and launch your first diagnostic.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* User Statistics Table - only show if there's data */}
+              {data.userStats.length > 0 && (
               <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-gray-200">
                   <div className="flex items-center justify-between">
@@ -371,8 +396,24 @@ export default function UsageAnalyticsPage() {
                     <tbody className="divide-y divide-gray-200">
                       {filteredStats.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                            {searchTerm ? 'No users found matching your search' : 'No diagnostics data available'}
+                          <td colSpan={4} className="px-6 py-12">
+                            <div className="text-center">
+                              <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                {searchTerm ? (
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                ) : (
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                )}
+                              </svg>
+                              <h3 className="text-sm font-medium text-gray-900 mb-1">
+                                {searchTerm ? 'No users found' : 'No diagnostics yet'}
+                              </h3>
+                              <p className="text-sm text-gray-500">
+                                {searchTerm 
+                                  ? 'Try adjusting your search term' 
+                                  : 'Diagnostics will appear here once users start generating them'}
+                              </p>
+                            </div>
                           </td>
                         </tr>
                       ) : (
@@ -431,6 +472,7 @@ export default function UsageAnalyticsPage() {
                   </div>
                 )}
               </div>
+              )}
             </>
           )}
         </div>
