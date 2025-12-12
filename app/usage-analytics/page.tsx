@@ -35,7 +35,7 @@ export default function UsageAnalyticsPage() {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push('/auth/signin')
+      router.push('/auth/signin?callbackUrl=/usage-analytics')
     }
   }, [status, router])
 

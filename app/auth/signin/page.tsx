@@ -1,9 +1,13 @@
 'use client'
 
 import { signIn } from "next-auth/react"
+import { useSearchParams } from "next/navigation"
 import { WeMaintainLogo } from "@/components/WeMaintainLogo"
 
 export default function SignIn() {
+  const searchParams = useSearchParams()
+  const callbackUrl = searchParams.get('callbackUrl') || '/'
+  
   // TEMPORARY: If BYPASS_SSO is enabled, middleware will redirect away from this page
   // This page will only be shown when SSO is active
   
@@ -20,7 +24,7 @@ export default function SignIn() {
         </p>
         
         <button
-          onClick={() => signIn('google', { callbackUrl: '/' })}
+          onClick={() => signIn('google', { callbackUrl })}
           className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 rounded-lg px-6 py-3 text-gray-700 font-medium hover:bg-gray-50 transition-colors"
         >
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
