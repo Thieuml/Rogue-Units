@@ -93,8 +93,9 @@ export async function GET() {
     })
   } catch (error) {
     console.error('[Usage Analytics API] Error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
-      { error: 'Failed to fetch usage analytics' },
+      { error: `Failed to fetch usage analytics: ${errorMessage}` },
       { status: 500 }
     )
   }
