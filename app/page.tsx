@@ -205,6 +205,45 @@ export default function Home() {
   const [recentResults, setRecentResults] = useState<DiagnosticResult[]>([])
   const [activeTab, setActiveTab] = useState<'summary' | 'visits' | 'analysis' | 'components'>('summary')
   
+  // Check for view=recent query parameter on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('view') === 'recent') {
+        setShowRecentResults(true)
+        setDiagnosticResult(null)
+        // Clean up URL
+        window.history.replaceState({}, '', '/')
+      }
+    }
+  }, [])
+  
+  // Optimistic admin check - remember if user was admin to prevent flickering
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
+  
+  // Initialize from localStorage FIRST for instant render (no flicker)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('isAdmin')
+      if (stored === 'true') {
+        setIsAdmin(true)
+      }
+    }
+  }, [])
+  
+  useEffect(() => {
+    if (session?.user?.email) {
+      const adminStatus = session.user.email === 'matthieu@wemaintain.com'
+      setIsAdmin(adminStatus)
+      // Store in localStorage for persistence across page loads
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('isAdmin', String(adminStatus))
+      }
+    }
+    // Note: We DON'T set isAdmin to false if session is undefined
+    // This prevents flickering during navigation when session is temporarily unavailable
+  }, [session?.user?.email])
+  
   // Filter states
   const [showMyDiagnostics, setShowMyDiagnostics] = useState(false)
   const [dateFilterStart, setDateFilterStart] = useState<string>('')
@@ -712,7 +751,7 @@ export default function Home() {
           </div>
           
           {/* Admin Tools Section - Only visible to matthieu@wemaintain.com */}
-          {session?.user?.email === 'matthieu@wemaintain.com' && (
+          {isAdmin && (
             <div className="pb-4 mt-4">
               <div className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Admin</div>
               <div className="space-y-2">
@@ -1779,24 +1818,30 @@ export default function Home() {
               <>
                 {/* Final Executive Summary */}
                 {diagnosticResult.analysis?.finalExecSummary && (
-                  <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Executive Summary</h3>
-                    <p className="text-gray-700 leading-relaxed text-sm">
-                      {diagnosticResult.analysis.finalExecSummary.replace(/at Unit /gi, '').replace(/at /gi, '')}
-                    </p>
+                  <div className="mb-8 rounded-lg overflow-hidden border border-[#73A1FF]" style={{ background: 'linear-gradient(to bottom, #D8D8EF 0%, #ffffff 100%)' }}>
+                    <div className="p-6">
+                      <h3 className="text-xl font-semibold text-gray-900 mb-3">Executive Summary</h3>
+                      <p className="text-gray-700 leading-relaxed text-sm">
+                        {diagnosticResult.analysis.finalExecSummary.replace(/at Unit /gi, '').replace(/at /gi, '')}
+                      </p>
+                    </div>
                   </div>
                 )}
                 
                 {/* Operational Summary */}
                 {diagnosticResult.analysis?.executiveSummary && (
-                  <div className="mb-10 pb-8 border-b border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Operational Summary</h3>
+                  <div className="mb-12 border-l-4 border-[#73A1FF]">
+                    <div className="mb-6 rounded-lg overflow-hidden" style={{ background: 'linear-gradient(to right, #D8D8EF 0%, #ffffff 100%)' }}>
+                      <div className="p-5 pl-8">
+                        <h3 className="text-xl font-semibold text-gray-900">Operational Summary</h3>
+                      </div>
+                    </div>
                     
                     {typeof diagnosticResult.analysis.executiveSummary === 'object' ? (
-                      <>
+                      <div className="pl-8 space-y-5">
                         {/* Overview */}
                         {diagnosticResult.analysis.executiveSummary.overview && (
-                          <div className="mb-5">
+                          <div className="rounded-lg border-l-4 border-[#73A1FF] p-4" style={{ backgroundColor: 'rgba(216, 216, 239, 0.3)' }}>
                             <h4 className="text-lg font-semibold text-gray-900 mb-2">Overview</h4>
                             <p className="text-gray-700 leading-relaxed text-sm">
                               {diagnosticResult.analysis.executiveSummary.overview.replace(/at Unit /gi, '').replace(/at /gi, '')}
@@ -1806,7 +1851,7 @@ export default function Home() {
                         
                         {/* Summary of Events */}
                         {diagnosticResult.analysis.executiveSummary.summaryOfEvents && (
-                          <div className="mb-5">
+                          <div className="rounded-lg border-l-4 border-[#73A1FF] p-4" style={{ backgroundColor: 'rgba(216, 216, 239, 0.3)' }}>
                             <h4 className="text-lg font-semibold text-gray-900 mb-2">Summary of Events</h4>
                             <p className="text-gray-700 leading-relaxed text-sm">
                               {diagnosticResult.analysis.executiveSummary.summaryOfEvents.replace(/at Unit /gi, '').replace(/at /gi, '')}
@@ -1816,101 +1861,139 @@ export default function Home() {
                         
                         {/* Current Situation */}
                         {diagnosticResult.analysis.executiveSummary.currentSituation && (
-                          <div>
+                          <div className="rounded-lg border-l-4 border-[#73A1FF] p-4" style={{ backgroundColor: 'rgba(216, 216, 239, 0.3)' }}>
                             <h4 className="text-lg font-semibold text-gray-900 mb-2">Current Situation and Next Steps</h4>
                             <p className="text-gray-700 leading-relaxed text-sm">
                               {diagnosticResult.analysis.executiveSummary.currentSituation.replace(/at Unit /gi, '').replace(/at /gi, '')}
                             </p>
                           </div>
                         )}
-                      </>
+                      </div>
                     ) : (
-                      <p className="text-gray-700 leading-relaxed text-sm">
-                        {diagnosticResult.analysis.executiveSummary.replace(/at Unit /gi, '').replace(/at /gi, '')}
-                      </p>
+                      <div className="pl-8">
+                        <p className="text-gray-700 leading-relaxed text-sm">
+                          {diagnosticResult.analysis.executiveSummary.replace(/at Unit /gi, '').replace(/at /gi, '')}
+                        </p>
+                      </div>
                     )}
                   </div>
                 )}
                 
                 {/* Technical Summary */}
                 {diagnosticResult.analysis?.technicalSummary && (
-                  <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Technical Summary</h3>
+                  <div className="mb-12">
+                    <div className="mb-6 rounded-lg overflow-hidden border-t-4 border-[#6D709C]" style={{ background: 'linear-gradient(to right, #D8D8EF 0%, #ffffff 100%)' }}>
+                      <div className="p-5">
+                        <h3 className="text-xl font-semibold text-gray-900">Technical Summary</h3>
+                      </div>
+                    </div>
                     
                     {/* Overview */}
                     {diagnosticResult.analysis.technicalSummary.overview && (
-                      <p className="text-gray-700 leading-relaxed text-sm mb-6">{diagnosticResult.analysis.technicalSummary.overview}</p>
+                      <p className="text-gray-700 leading-relaxed text-sm mb-8">{diagnosticResult.analysis.technicalSummary.overview}</p>
                     )}
                     
                     {/* Pattern Details */}
                     {diagnosticResult.analysis.technicalSummary.patternDetails && diagnosticResult.analysis.technicalSummary.patternDetails.length > 0 && (
-                      <div className="space-y-8">
+                      <div className="space-y-6">
                         {diagnosticResult.analysis.technicalSummary.patternDetails.map((pattern: any, idx: number) => (
-                          <div key={idx} className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
-                            {/* Pattern Name */}
-                            <h4 className="text-lg font-semibold text-gray-900 mb-5 pb-3 border-b border-gray-100">{pattern.patternName}</h4>
-                            
-                            {/* Verdict */}
-                            <div className="mb-6 pb-5 border-b border-gray-100">
-                              <p className="text-gray-700 leading-relaxed text-sm">{pattern.verdict}</p>
-                            </div>
-                            
-                            {/* Quantified Impact */}
-                            {pattern.quantifiedImpact && (
-                              <div className="mb-6 pb-5 border-b border-gray-100">
-                                <h5 className="text-lg font-semibold text-gray-900 mb-2">Quantified Impact</h5>
-                                <div className="text-sm text-gray-700 space-y-1.5">
-                                  <p><strong>Breakdowns:</strong> {pattern.quantifiedImpact.breakdownCount} over {pattern.quantifiedImpact.timeSpan}</p>
-                                  <p><strong>Downtime:</strong> {pattern.quantifiedImpact.downtimeHours} total ({pattern.quantifiedImpact.downtimePerEvent} per event)</p>
-                                  <p><strong>Risk Level:</strong> <span className="font-semibold">{pattern.quantifiedImpact.riskLevel.toUpperCase()}</span> - {pattern.quantifiedImpact.riskRationale}</p>
-                                </div>
+                          <div key={idx} className="border border-gray-200 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow" style={{ backgroundColor: 'rgba(216, 216, 239, 0.2)' }}>
+                            <div className="border-t-4 border-[#73A1FF]">
+                              {/* Pattern Name */}
+                              <div className="p-5" style={{ backgroundColor: 'rgba(109, 112, 156, 0.1)' }}>
+                                <h4 className="text-lg font-semibold text-gray-900">{pattern.patternName}</h4>
                               </div>
-                            )}
-                            
-                            {/* Root Cause Analysis (formerly Driver Tree + Hypotheses) */}
-                            {pattern.driverTree && (
-                              <div className="mb-6 pb-5 border-b border-gray-100">
-                                <h5 className="text-lg font-semibold text-gray-900 mb-2">Root Cause Analysis</h5>
-                                <p className="text-sm text-gray-700 mb-2">{pattern.driverTree.replace(/^Defective materials? →?\s*/i, '').replace(/^Defective materials? and \w+ →?\s*/i, '')}</p>
-                                {/* Add hypothesis reasoning if available */}
-                                {diagnosticResult.analysis?.hypotheses && diagnosticResult.analysis.hypotheses.length > 0 && (
-                                  <div className="mt-3 pt-3 border-t border-gray-100">
-                                    {diagnosticResult.analysis.hypotheses.map((hyp: any, hypIdx: number) => (
-                                      <p key={hypIdx} className="text-sm text-gray-700 mt-1">
-                                        <span className="font-medium">{hyp.category} ({hyp.likelihood} likelihood):</span> {hyp.reasoning}
-                                      </p>
-                                    ))}
+                              
+                              <div className="p-6 bg-white space-y-6">
+                                {/* Verdict */}
+                                <div className="pb-5 border-b border-gray-200" style={{ backgroundColor: 'rgba(216, 216, 239, 0.15)' }}>
+                                  <p className="text-gray-700 leading-relaxed text-sm p-3">{pattern.verdict}</p>
+                                </div>
+                                
+                                {/* Quantified Impact */}
+                                {pattern.quantifiedImpact && (
+                                  <div className="pb-5 border-b border-gray-200">
+                                    <h5 className="text-base font-semibold text-gray-900 mb-3">Quantified Impact</h5>
+                                    <div className="text-sm text-gray-700 space-y-2">
+                                      <p><strong>Breakdowns:</strong> {pattern.quantifiedImpact.breakdownCount} over {pattern.quantifiedImpact.timeSpan}</p>
+                                      <p><strong>Downtime:</strong> {pattern.quantifiedImpact.downtimeHours} total ({pattern.quantifiedImpact.downtimePerEvent} per event)</p>
+                                      <div className="flex items-center gap-2">
+                                        <strong>Risk Level:</strong>
+                                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                          pattern.quantifiedImpact.riskLevel.toLowerCase() === 'high' 
+                                            ? 'bg-red-100 text-red-800'
+                                            : pattern.quantifiedImpact.riskLevel.toLowerCase() === 'medium'
+                                            ? 'bg-yellow-100 text-yellow-800'
+                                            : 'bg-green-100 text-green-800'
+                                        }`}>
+                                          {pattern.quantifiedImpact.riskLevel.toUpperCase()}
+                                        </span>
+                                        <span className="text-gray-600">- {pattern.quantifiedImpact.riskRationale}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {/* Root Cause Analysis */}
+                                {pattern.driverTree && (
+                                  <div className="pb-5 border-b border-gray-200 border-l-4 border-[#73A1FF] pl-4">
+                                    <h5 className="text-base font-semibold text-gray-900 mb-2">Root Cause Analysis</h5>
+                                    <p className="text-sm text-gray-700 mb-2">{pattern.driverTree.replace(/^Defective materials? →?\s*/i, '').replace(/^Defective materials? and \w+ →?\s*/i, '')}</p>
+                                    {diagnosticResult.analysis?.hypotheses && diagnosticResult.analysis.hypotheses.length > 0 && (
+                                      <div className="mt-3 pt-3 border-t border-gray-200">
+                                        {diagnosticResult.analysis.hypotheses.map((hyp: any, hypIdx: number) => (
+                                          <p key={hypIdx} className="text-sm text-gray-700 mt-1">
+                                            <span className="font-medium">{hyp.category} ({hyp.likelihood} likelihood):</span> {hyp.reasoning}
+                                          </p>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                
+                                {/* Actionable Recommendations */}
+                                {pattern.actionableRecommendations && pattern.actionableRecommendations.length > 0 && (
+                                  <div className="pb-5 border-b border-gray-200">
+                                    <h5 className="text-base font-semibold text-gray-900 mb-3">Actionable Recommendations</h5>
+                                    <div className="space-y-4">
+                                      {pattern.actionableRecommendations.map((rec: any, recIdx: number) => (
+                                        <div key={recIdx} className="rounded-lg border border-gray-200 p-4" style={{ backgroundColor: 'rgba(216, 216, 239, 0.15)' }}>
+                                          <div className="flex items-start gap-3">
+                                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#73A1FF] text-white flex items-center justify-center text-xs font-semibold">
+                                              {recIdx + 1}
+                                            </div>
+                                            <div className="flex-1">
+                                              <p className="font-medium text-gray-900 mb-2">{rec.action}</p>
+                                              <p className="text-sm text-gray-600 mb-1">
+                                                <strong>Timeframe:</strong> <span className="font-medium">{rec.timeframe.replace(/_/g, ' ')}</span>
+                                              </p>
+                                              <p className="text-sm text-gray-600"><strong>Expected:</strong> {rec.expectedOutcome}</p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {/* Resolution Probability */}
+                                {pattern.resolutionProbability && (
+                                  <div>
+                                    <h5 className="text-base font-semibold text-gray-900 mb-3">Probability of Resolution</h5>
+                                    <div className="space-y-2">
+                                      <p className="text-sm text-gray-700"><strong>Success Rate:</strong> {pattern.resolutionProbability.probability}</p>
+                                      <div className="w-full bg-gray-200 rounded-full h-2">
+                                        <div 
+                                          className="bg-[#73A1FF] h-2 rounded-full transition-all"
+                                          style={{ width: pattern.resolutionProbability.probability }}
+                                        ></div>
+                                      </div>
+                                      <p className="text-sm text-gray-700 mt-3"><strong>If issue persists:</strong> {pattern.resolutionProbability.escalationPath}</p>
+                                    </div>
                                   </div>
                                 )}
                               </div>
-                            )}
-                            
-                            {/* Actionable Recommendations */}
-                            {pattern.actionableRecommendations && pattern.actionableRecommendations.length > 0 && (
-                              <div className="mb-6 pb-5 border-b border-gray-100">
-                                <h5 className="text-lg font-semibold text-gray-900 mb-2">Actionable Recommendations</h5>
-                                <div className="space-y-3">
-                                  {pattern.actionableRecommendations.map((rec: any, recIdx: number) => (
-                                    <div key={recIdx} className="text-sm text-gray-700">
-                                      <p className="font-medium">{rec.action}</p>
-                                      <p className="text-sm text-gray-600 mt-1">
-                                        Timeframe: <span className="font-medium">{rec.timeframe.replace(/_/g, ' ')}</span>
-                                      </p>
-                                      <p className="text-sm text-gray-600">Expected: {rec.expectedOutcome}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Resolution Probability */}
-                            {pattern.resolutionProbability && (
-                              <div>
-                                <h5 className="text-lg font-semibold text-gray-900 mb-2">Probability of Resolution</h5>
-                                <p className="text-sm text-gray-700"><strong>Success Rate:</strong> {pattern.resolutionProbability.probability}</p>
-                                <p className="text-sm text-gray-700 mt-1"><strong>If issue persists:</strong> {pattern.resolutionProbability.escalationPath}</p>
-                              </div>
-                            )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1920,31 +2003,35 @@ export default function Home() {
                 
                 {/* Fallback: Show Repeated Patterns if Technical Summary not available */}
                 {!diagnosticResult.analysis?.technicalSummary && diagnosticResult.analysis?.repeatedPatterns && diagnosticResult.analysis.repeatedPatterns.length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Repeated Patterns</h3>
-                    <div className="space-y-3">
+                  <div className="mb-12">
+                    <div className="mb-6 rounded-lg overflow-hidden border-t-4 border-yellow-400" style={{ background: 'linear-gradient(to right, #FEF3C7 0%, #ffffff 100%)' }}>
+                      <div className="p-5">
+                        <h3 className="text-xl font-semibold text-gray-900">Repeated Patterns</h3>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
                       {diagnosticResult.analysis.repeatedPatterns.map((pattern: any, idx: number) => (
-                        <div key={idx} className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                          <p className="font-semibold text-gray-900 mb-2">
+                        <div key={idx} className="border border-yellow-300 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow" style={{ backgroundColor: 'rgba(254, 243, 199, 0.3)' }}>
+                          <p className="font-semibold text-gray-900 mb-3 text-base">
                             {pattern.pattern} ({pattern.frequency} occurrences)
                           </p>
                           {pattern.summary && (
-                            <p className="text-sm text-gray-700 mb-2 leading-relaxed">{pattern.summary}</p>
+                            <p className="text-sm text-gray-700 mb-3 leading-relaxed">{pattern.summary}</p>
                           )}
                           {pattern.rootCause && (
-                            <p className="text-sm text-gray-700 mb-1"><strong>Root Cause:</strong> {pattern.rootCause}</p>
+                            <p className="text-sm text-gray-700 mb-2 border-l-3 border-yellow-400 pl-3"><strong>Root Cause:</strong> {pattern.rootCause}</p>
                           )}
                           {pattern.impact && (
-                            <p className="text-sm text-gray-700 mb-1"><strong>Impact:</strong> {pattern.impact}</p>
+                            <p className="text-sm text-gray-700 mb-2 border-l-3 border-yellow-400 pl-3"><strong>Impact:</strong> {pattern.impact}</p>
                           )}
                           {pattern.escalationPath && (
-                            <p className="text-sm text-gray-700 mb-1"><strong>Escalation:</strong> {pattern.escalationPath}</p>
+                            <p className="text-sm text-gray-700 mb-2 border-l-3 border-yellow-400 pl-3"><strong>Escalation:</strong> {pattern.escalationPath}</p>
                           )}
                           {pattern.correlation && (
-                            <p className="text-sm text-gray-700 mb-1"><strong>Correlation:</strong> {pattern.correlation}</p>
+                            <p className="text-sm text-gray-700 mb-2 border-l-3 border-yellow-400 pl-3"><strong>Correlation:</strong> {pattern.correlation}</p>
                           )}
                           {pattern.examples && pattern.examples.length > 0 && (
-                            <ul className="list-disc list-inside text-sm text-gray-700 mt-2 ml-4">
+                            <ul className="list-disc list-inside text-sm text-gray-700 mt-3 ml-4 space-y-1">
                               {pattern.examples.slice(0, 3).map((example: string, exIdx: number) => (
                                 <li key={exIdx}>{example}</li>
                               ))}
@@ -1958,15 +2045,19 @@ export default function Home() {
                 
                 {/* Hypotheses - Only show if Technical Summary not available */}
                 {!diagnosticResult.analysis?.technicalSummary && diagnosticResult.analysis?.hypotheses && diagnosticResult.analysis.hypotheses.length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Likely Causes</h3>
-                    <div className="space-y-3">
+                  <div className="mb-12">
+                    <div className="mb-6 rounded-lg overflow-hidden border-t-4 border-[#73A1FF]" style={{ background: 'linear-gradient(to right, #D8D8EF 0%, #ffffff 100%)' }}>
+                      <div className="p-5">
+                        <h3 className="text-xl font-semibold text-gray-900">Likely Causes</h3>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
                       {diagnosticResult.analysis.hypotheses.map((hypothesis: any, idx: number) => (
-                        <div key={idx} className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                          <p className="font-medium text-gray-900 mb-1">
+                        <div key={idx} className="border border-[#73A1FF] rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow" style={{ backgroundColor: 'rgba(216, 216, 239, 0.2)' }}>
+                          <p className="font-semibold text-gray-900 mb-2 text-base">
                             {hypothesis.category} ({hypothesis.likelihood} likelihood)
                           </p>
-                          <p className="text-sm text-gray-700">{hypothesis.reasoning}</p>
+                          <p className="text-sm text-gray-700 leading-relaxed">{hypothesis.reasoning}</p>
                         </div>
                       ))}
                     </div>

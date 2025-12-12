@@ -43,6 +43,32 @@ export default function PromptTesting() {
   const [showCountryDropdown, setShowCountryDropdown] = useState(false)
   const [showBuildingDropdown, setShowBuildingDropdown] = useState(false)
   const [showDeviceDropdown, setShowDeviceDropdown] = useState(false)
+  
+  // Optimistic admin check - remember if user was admin to prevent flickering
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
+  
+  // Initialize from localStorage FIRST for instant render (no flicker)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('isAdmin')
+      if (stored === 'true') {
+        setIsAdmin(true)
+      }
+    }
+  }, [])
+  
+  useEffect(() => {
+    if (session?.user?.email) {
+      const adminStatus = session.user.email === 'matthieu@wemaintain.com'
+      setIsAdmin(adminStatus)
+      // Store in localStorage for persistence across page loads
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('isAdmin', String(adminStatus))
+      }
+    }
+    // Note: We DON'T set isAdmin to false if session is undefined
+    // This prevents flickering during navigation when session is temporarily unavailable
+  }, [session?.user?.email])
 
   const countryDropdownRef = useRef<HTMLDivElement>(null)
   const buildingInputRef = useRef<HTMLInputElement>(null)
@@ -267,7 +293,7 @@ export default function PromptTesting() {
               <span>Launch New Diagnostic</span>
             </a>
             <a
-              href="/"
+              href="/?view=recent"
               className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm text-white font-medium cursor-pointer transition-colors hover:bg-slate-700`}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
@@ -278,7 +304,7 @@ export default function PromptTesting() {
           </div>
           
           {/* Admin Tools Section - Only visible to matthieu@wemaintain.com */}
-          {session?.user?.email === 'matthieu@wemaintain.com' && (
+          {isAdmin && (
             <div className="pb-4 mt-4">
               <div className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Admin</div>
               <div className="space-y-2">
