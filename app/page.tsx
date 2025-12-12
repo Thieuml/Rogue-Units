@@ -1937,7 +1937,7 @@ export default function Home() {
                         
                         {/* Service Handling Review - Internal Only */}
                         {diagnosticResult.analysis.executiveSummary.serviceHandlingReview && (
-                          <div className="rounded-lg border-t-2 border-amber-400 shadow-sm" style={{ backgroundColor: 'rgba(251, 191, 36, 0.05)' }}>
+                          <div className="rounded-lg border-t-2 border-[#73A1FF] shadow-sm" style={{ backgroundColor: 'rgba(251, 191, 36, 0.02)' }}>
                             <div className="p-5">
                               <div className="flex items-center gap-3 mb-3">
                                 <h4 className="text-lg font-semibold text-gray-900">Service Handling Review</h4>

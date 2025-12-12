@@ -542,16 +542,34 @@ export async function fetchVisitReports(deviceId: string, daysBack: number = 90)
         row['task_task_id'] ||
         ''
       )
-      // Construct PDF URL from task_id
-      const pdfReport = taskId 
-        ? `https://wemaintain-data-prod.s3.eu-west-1.amazonaws.com/missions/reports/tasks/${taskId}`
-        : (
-          row['task.pdf_report'] ||
-          row['PDF Report'] ||
-          row['pdf_report'] ||
-          row['task_pdf_report'] ||
-          ''
-        )
+      
+      // Extract PDF report field - could be a UUID/file ID or full URL
+      const pdfReportRaw = (
+        row['task.pdf_report'] ||
+        row['PDF Report'] ||
+        row['pdf_report'] ||
+        row['task_pdf_report'] ||
+        row['report'] ||
+        ''
+      )
+      
+      // Construct full URL if pdfReportRaw is a UUID/file ID
+      // PDF report URLs follow: https://admin.wemaintain.com/download-report/task/{file-id}
+      let pdfReport: string | null = null
+      if (pdfReportRaw) {
+        if (typeof pdfReportRaw === 'string') {
+          // If it's already a full URL, use it as-is
+          if (pdfReportRaw.startsWith('http://') || pdfReportRaw.startsWith('https://')) {
+            pdfReport = pdfReportRaw
+          } else {
+            // Construct the URL: https://admin.wemaintain.com/download-report/task/{file-id}
+            pdfReport = `https://admin.wemaintain.com/download-report/task/${pdfReportRaw}`
+          }
+        } else {
+          pdfReport = `https://admin.wemaintain.com/download-report/task/${String(pdfReportRaw)}`
+        }
+      }
+      
       const origin = (
         row['task_summary.defect_origin'] ||
         row['Origin'] ||
