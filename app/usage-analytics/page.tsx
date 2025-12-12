@@ -39,7 +39,24 @@ export default function UsageAnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [country, setCountry] = useState<string>('FR')
+  
+  // Initialize country from localStorage or default to FR
+  const [country, setCountryState] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('diagnostic-country')
+      return saved || 'FR'
+    }
+    return 'FR'
+  })
+  
+  // Wrapper to also save to localStorage
+  const setCountry = (newCountry: string) => {
+    setCountryState(newCountry)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('diagnostic-country', newCountry)
+    }
+  }
+  
   const [showCountryDropdown, setShowCountryDropdown] = useState(false)
 
   useEffect(() => {
