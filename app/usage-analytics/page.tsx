@@ -102,9 +102,9 @@ export default function UsageAnalyticsPage() {
   ) || []
 
   return (
-    <div className="flex h-screen bg-slate-50">
+    <div className="flex h-screen bg-slate-50 overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-800 text-white flex flex-col">
+      <aside className="w-64 bg-slate-800 text-white flex flex-col h-screen flex-shrink-0">
         <div className="p-6 border-b border-slate-700">
           <WeMaintainLogo />
         </div>
