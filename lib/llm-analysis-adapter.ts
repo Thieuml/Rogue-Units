@@ -21,7 +21,8 @@ export function adaptV2ToV1(v2: DiagnosticAnalysisV2): DiagnosticAnalysisV1 {
   const executiveSummary: DiagnosticAnalysisV1['executiveSummary'] = {
     overview: execSumText.split('. ').slice(0, 2).join('. ') + '.',
     summaryOfEvents: execSumText,
-    currentSituation: 'Current status requires review.'
+    currentSituation: 'Current status requires review.',
+    serviceHandlingReview: 'Service handling review not available for V2 diagnostics.'
   }
   
   // Convert linked parts from core to v1 format
