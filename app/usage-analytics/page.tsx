@@ -55,7 +55,8 @@ export default function UsageAnalyticsPage() {
   
   useEffect(() => {
     if (session?.user?.email) {
-      const adminStatus = session.user.email === 'matthieu@wemaintain.com'
+      const adminEmails = ['matthieu@wemaintain.com', 'marine@wemaintain.com', 'georgia@wemaintain.com']
+      const adminStatus = adminEmails.includes(session.user.email)
       setIsAdmin(adminStatus)
       // Store in localStorage for persistence across page loads
       if (typeof window !== 'undefined') {
@@ -219,7 +220,7 @@ export default function UsageAnalyticsPage() {
             </a>
           </div>
           
-          {/* Admin Tools Section - Only visible to matthieu@wemaintain.com */}
+          {/* Admin Tools Section - Only visible to admin users */}
           {isAdmin && (
             <div className="pb-4 mt-4">
               <div className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Admin</div>
