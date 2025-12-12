@@ -3,7 +3,7 @@
 import { signOut, useSession } from "next-auth/react"
 
 export function UserMenu() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   
   // TEMPORARY: Show bypass indicator if SSO is bypassed
   // Remove this once Google Workspace SSO is configured
@@ -25,7 +25,35 @@ export function UserMenu() {
     )
   }
   
-  if (!session) return null
+  // Show loading state while checking session
+  if (status === 'loading') {
+    return (
+      <div className="p-4 border-t border-slate-700">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center animate-pulse">
+            <span className="text-white font-semibold">...</span>
+          </div>
+          <div className="flex-1">
+            <div className="text-sm font-semibold text-white">Loading...</div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
+  // If not authenticated, show sign-in prompt
+  if (!session) {
+    return (
+      <div className="p-4 border-t border-slate-700">
+        <a
+          href="/auth/signin"
+          className="w-full text-sm text-white hover:text-blue-400 px-3 py-2 rounded hover:bg-slate-700 transition-colors text-center block"
+        >
+          Sign In
+        </a>
+      </div>
+    )
+  }
   
   // Extract first letter of name or email for avatar
   const displayName = session.user?.name || session.user?.email || 'U'
