@@ -15,7 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <SessionProvider session={null}>
+        <SessionProvider>
           {children}
         </SessionProvider>
       </body>
