@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
 import { WeMaintainLogo } from '@/components/WeMaintainLogo'
 import { UserMenu } from '@/components/UserMenu'
 
@@ -27,17 +26,10 @@ interface UsageAnalyticsData {
 
 export default function UsageAnalyticsPage() {
   const { data: session, status } = useSession()
-  const router = useRouter()
   const [data, setData] = useState<UsageAnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/auth/signin?callbackUrl=/usage-analytics')
-    }
-  }, [status, router])
 
   useEffect(() => {
     if (status === 'authenticated') {
