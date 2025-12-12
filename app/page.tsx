@@ -54,6 +54,7 @@ interface DiagnosticResult {
   id?: string
   unitId: string
   unitName: string
+  buildingId?: string
   buildingName: string
   country?: string
   userId?: string | null
@@ -558,6 +559,7 @@ export default function Home() {
       setDiagnosticResult({
         unitId: selectedDeviceId,
         unitName: selectedDevice.name,
+        buildingId: selectedBuildingId,
         buildingName: selectedBuilding.name,
         visitReports: result.visitReports || [],
         breakdowns: result.breakdowns || [],
@@ -593,7 +595,7 @@ export default function Home() {
         body: JSON.stringify({
           unitId: diagnosticResult.unitId,
           unitName: diagnosticResult.unitName,
-          buildingId: selectedBuildingId,
+          buildingId: diagnosticResult.buildingId || selectedBuildingId || 'unknown',
           buildingName: diagnosticResult.buildingName,
           context: context.trim() || undefined,
           // Pass existing data to avoid re-fetching
