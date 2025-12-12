@@ -73,17 +73,6 @@ export default function UsageAnalyticsPage() {
     stat.userId.toLowerCase().includes(searchTerm.toLowerCase())
   ) || []
 
-  if (status === 'loading' || !session) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="flex h-screen bg-slate-50">
       {/* Sidebar */}
@@ -134,7 +123,7 @@ export default function UsageAnalyticsPage() {
         <div className="p-8 max-w-7xl mx-auto">
           <h1 className="text-3xl font-bold mb-6 text-gray-900">Usage Analytics</h1>
 
-          {loading && (
+          {(status === 'loading' || loading) && (
             <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-8 text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
               <p className="text-gray-600">Loading analytics...</p>
@@ -161,7 +150,7 @@ export default function UsageAnalyticsPage() {
             </div>
           )}
 
-          {data && !loading && (
+          {data && !loading && status === 'authenticated' && (
             <>
               {/* Overall Statistics Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
