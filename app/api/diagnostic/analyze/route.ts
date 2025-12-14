@@ -34,7 +34,9 @@ export async function POST(request: NextRequest) {
     }
     
     const body = await request.json()
-    const { unitId, unitName, buildingId, buildingName, context, country, _forceVersion } = body
+    const { unitId, unitName, buildingId, buildingName, context, country, language, _forceVersion } = body
+    
+    console.log('[API] Request parameters:', { unitId, unitName, buildingId, buildingName, context, country, language, _forceVersion })
     
     if (!unitId || !unitName || !buildingId || !buildingName) {
       return NextResponse.json(
@@ -141,7 +143,10 @@ export async function POST(request: NextRequest) {
       callbackFrequency,
       timeSinceLastMaintenance,
       context: context?.trim() || undefined,
+      language: language || 'en', // Default to English if not provided
     }
+    
+    console.log('[API] Prepared diagnosticData with language:', diagnosticData.language)
     
     // Generate LLM analysis
     // Use forced version from developer testing, otherwise use configured version

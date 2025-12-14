@@ -46,6 +46,7 @@ export interface DiagnosticData {
   callbackFrequency?: number
   timeSinceLastMaintenance?: number
   context?: string
+  language?: 'en' | 'fr' // Language for LLM response
 }
 
 export interface DiagnosticAnalysisV1 {
@@ -756,8 +757,50 @@ export async function generateDiagnosticAnalysis(
 export async function generateDiagnosticAnalysisV1(
   data: DiagnosticData
 ): Promise<DiagnosticAnalysisV1> {
-  const systemPrompt = getSystemPromptV1()
-  const userMessage = buildUserMessage(data)
+  console.log('[LLM V1] Language parameter received:', data.language)
+  let systemPrompt = getSystemPromptV1()
+  
+  // Add language instruction at the top for French
+  if (data.language === 'fr') {
+    console.log('[LLM V1] Adding French language instructions to prompt')
+    const frenchInstruction = `🇫🇷 INSTRUCTION CRITIQUE - RÉPONDRE EN FRANÇAIS 🇫🇷
+
+VOUS DEVEZ répondre ENTIÈREMENT en français. Ceci est une exigence ABSOLUE et NON-NÉGOCIABLE.
+
+RÈGLES OBLIGATOIRES:
+1. TOUS les textes dans votre réponse JSON doivent être en français
+2. TOUS les champs "overview", "summary", "description" doivent être en français
+3. TOUTES les analyses, recommandations et observations doivent être en français
+4. Les noms de composants techniques doivent être traduits en français
+5. NE PAS utiliser l'anglais, même pour les termes techniques
+
+Terminologie professionnelle de maintenance d'ascenseurs à utiliser:
+- "panne" (breakdown), "technicien" (engineer), "intervention" (visit)
+- "appareil/ascenseur" (unit/lift), "composant" (component), "défaillance" (failure)
+- "porte" (door), "moteur" (motor), "contrôleur" (controller)
+- "cabine" (car), "câble" (rope), "poulie" (sheave)
+- "maintenance préventive", "dépannage", "remise en service", "immobilisation"
+
+RAPPEL: Répondez en français. Votre réponse doit être 100% en français.
+
+---
+
+`
+    systemPrompt = frenchInstruction + systemPrompt
+  } else {
+    console.log('[LLM V1] Using English (default) - language:', data.language)
+  }
+  
+  let userMessage = buildUserMessage(data)
+  
+  // Add French reminder to user message as well for double emphasis
+  if (data.language === 'fr') {
+    userMessage = `RAPPEL IMPORTANT: Vous DEVEZ répondre ENTIÈREMENT en français. Tous les champs du JSON doivent être en français.
+
+${userMessage}
+
+RAPPEL FINAL: Réponse COMPLÈTE en français requise.`
+  }
   
   // Try models in order of preference
   const modelsToTry = [

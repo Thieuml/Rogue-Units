@@ -5,7 +5,9 @@ import useSWR from 'swr'
 import { useSession } from 'next-auth/react'
 import { WeMaintainLogo } from '@/components/WeMaintainLogo'
 import { UserMenu } from '@/components/UserMenu'
+import LanguageToggle from '@/components/LanguageToggle'
 import { translateStateKey, translateProblemKey } from '@/lib/state-key-translator'
+import { useTranslation, Language } from '@/lib/translations'
 
 const fetcher = async (url: string) => {
   console.log('[Debug] Fetching URL:', url)
@@ -174,12 +176,21 @@ export default function Home() {
   // Initialize country from localStorage or default to FR
   const [country, setCountryState] = useState<string>('FR')
   
+  // Initialize language (default to English)
+  const [language, setLanguageState] = useState<Language>('en')
+  const { t } = useTranslation(language)
+  
   // Load saved country from localStorage after mount to avoid hydration mismatch
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('diagnostic-country')
       if (saved && saved !== country) {
         setCountryState(saved)
+      }
+      // Load language preference
+      const savedLanguage = localStorage.getItem('diagnostic-language') as Language
+      if (savedLanguage === 'en' || savedLanguage === 'fr') {
+        setLanguageState(savedLanguage)
       }
     }
   }, [])
@@ -189,6 +200,14 @@ export default function Home() {
     setCountryState(newCountry)
     if (typeof window !== 'undefined') {
       localStorage.setItem('diagnostic-country', newCountry)
+    }
+  }
+  
+  // Wrapper to persist language changes
+  const setLanguage = (newLanguage: Language) => {
+    setLanguageState(newLanguage)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('diagnostic-language', newLanguage)
     }
   }
   const [selectedBuildingId, setSelectedBuildingId] = useState<string>('')
@@ -537,6 +556,7 @@ export default function Home() {
     setDiagnosticResult(null)
     
     try {
+      console.log('[Debug] Starting analysis with language:', language)
       const response = await fetch('/api/diagnostic/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -547,6 +567,7 @@ export default function Home() {
           buildingName: selectedBuilding.name,
           context: context.trim() || undefined,
           country: country,
+          language: language, // Pass language to API
         }),
       })
       
@@ -665,15 +686,20 @@ export default function Home() {
     <div className="h-screen bg-gray-50 flex overflow-hidden">
       {/* Sidebar */}
       <aside className="w-64 bg-slate-800 text-white flex flex-col h-screen flex-shrink-0 relative z-10">
-        <div className="p-6 border-b border-slate-700">
+        <div className="px-6 py-4 border-b border-slate-700">
           <WeMaintainLogo />
+          <div className="mt-2 flex justify-end">
+            <div className="text-[10px]">
+              <LanguageToggle language={language} onLanguageChange={setLanguage} />
+            </div>
+          </div>
         </div>
         <nav className="flex-1 p-4 overflow-y-auto relative z-10">
           <div className="space-y-2">
             {/* Country Selection - Above Navigation */}
             <div className="mb-4">
               <div className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                Country
+                {t('nav.country')}
               </div>
               <div className="relative" ref={countryDropdownRef}>
                 <button
@@ -724,7 +750,7 @@ export default function Home() {
             </div>
             
             <div className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
-              Navigation
+              {t('nav.navigation')}
             </div>
             <a
               href="#"
@@ -753,7 +779,7 @@ export default function Home() {
                 <path fillRule="evenodd" clipRule="evenodd" d="M15.7692 1.85001L19.65 5.73077V20C19.65 21.1358 18.7693 22.0659 17.6535 22.1446L17.5 22.15H6.49998C5.36419 22.15 4.4341 21.2693 4.35537 20.1535L4.34998 20V4.00001C4.34998 2.86422 5.23068 1.93413 6.34643 1.8554L6.49998 1.85001H15.7692ZM14.549 3.15001H6.49998C6.06664 3.15001 5.70905 3.47427 5.6566 3.89338L5.64998 4.00001V20C5.64998 20.4333 5.97424 20.7909 6.39335 20.8434L6.49998 20.85H17.5C17.9333 20.85 18.2909 20.5257 18.3434 20.1066L18.35 20L18.349 7.15001H16.2C15.3367 7.15001 14.6282 6.48699 14.556 5.64237L14.55 5.50001L14.549 3.15001ZM15.849 3.76901L15.85 5.50001C15.85 5.66914 15.9699 5.81026 16.1294 5.8429L16.2 5.85001H17.93L15.849 3.76901Z" fill="currentColor"/>
                 <path d="M10.2 10H14.64C14.8388 10 15 10.1612 15 10.36V14.8M13.8 11.2L9 16" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
               </svg>
-              <span>Launch New Diagnostic</span>
+              <span>{t('nav.newDiagnostic')}</span>
             </a>
             <a
               href="#"
@@ -781,14 +807,14 @@ export default function Home() {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
                 <path fillRule="evenodd" clipRule="evenodd" d="M15 2.20001C15.6351 2.20001 16.15 2.71488 16.15 3.35001L16.149 4.00001H18C18.8633 4.00001 19.5718 4.66303 19.6439 5.50764L19.65 5.65001V20.65C19.65 21.5133 18.987 22.2218 18.1424 22.294L18 22.3H6.00001C5.1367 22.3 4.42825 21.637 4.35606 20.7924L4.35001 20.65V5.65001C4.35001 4.7867 5.01302 4.07825 5.85764 4.00607L6.00001 4.00001H7.85001V3.35001C7.85001 2.75723 8.29852 2.2692 8.8747 2.20676L9.00001 2.20001H15ZM16.15 5.85001C16.15 6.48514 15.6351 7.00001 15 7.00001H9.00001C8.36488 7.00001 7.85001 6.48514 7.85001 5.85001V5.30001H6.00001C5.83087 5.30001 5.68975 5.41999 5.65712 5.57948L5.65001 5.65001V20.65C5.65001 20.8191 5.76998 20.9603 5.92947 20.9929L6.00001 21H18C18.1691 21 18.3103 20.88 18.3429 20.7205L18.35 20.65V5.65001C18.35 5.48088 18.23 5.33976 18.0705 5.30712L18 5.30001H16.149L16.15 5.85001ZM8.25001 16.3C8.66422 16.3 9.00001 16.6358 9.00001 17.05C9.00001 17.4642 8.66422 17.8 8.25001 17.8C7.83579 17.8 7.50001 17.4642 7.50001 17.05C7.50001 16.6358 7.83579 16.3 8.25001 16.3ZM16 16.4C16.359 16.4 16.65 16.691 16.65 17.05C16.65 17.3764 16.4095 17.6465 16.0961 17.693L16 17.7H11C10.641 17.7 10.35 17.409 10.35 17.05C10.35 16.7237 10.5905 16.4535 10.904 16.4071L11 16.4H16ZM8.25001 12.825C8.66422 12.825 9.00001 13.1608 9.00001 13.575C9.00001 13.9892 8.66422 14.325 8.25001 14.325C7.83579 14.325 7.50001 13.9892 7.50001 13.575C7.50001 13.1608 7.83579 12.825 8.25001 12.825ZM16 12.925C16.359 12.925 16.65 13.216 16.65 13.575C16.65 13.9014 16.4095 14.1715 16.0961 14.218L16 14.225H11C10.641 14.225 10.35 13.934 10.35 13.575C10.35 13.2487 10.5905 12.9785 10.904 12.9321L11 12.925H16ZM8.25001 9.35001C8.66422 9.35001 9.00001 9.6858 9.00001 10.1C9.00001 10.5142 8.66422 10.85 8.25001 10.85C7.83579 10.85 7.50001 10.5142 7.50001 10.1C7.50001 9.6858 7.83579 9.35001 8.25001 9.35001ZM16 9.45001C16.359 9.45001 16.65 9.74103 16.65 10.1C16.65 10.4264 16.4095 10.6965 16.0961 10.743L16 10.75H11C10.641 10.75 10.35 10.459 10.35 10.1C10.35 9.77366 10.5905 9.50349 10.904 9.45706L11 9.45001H16ZM14.85 3.50001H9.15001V5.70001H14.85V3.50001Z" fill="currentColor"/>
               </svg>
-              <span>Recent Diagnostics</span>
+              <span>{t('nav.recentDiagnostics')}</span>
             </a>
           </div>
           
           {/* Admin Tools Section - Only visible to admin users */}
           {isAdmin && (
             <div className="pb-4 mt-4">
-              <div className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Admin</div>
+              <div className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">{t('nav.adminTools')}</div>
               <div className="space-y-2">
                 <a
                   href="/prompt-testing"
@@ -799,7 +825,7 @@ export default function Home() {
                     <path fillRule="evenodd" clipRule="evenodd" d="M16.4179 16.8132C16.5351 16.8972 16.6711 16.9566 16.8185 16.9836C16.8774 16.9944 16.938 17 17 17C17.2481 17 17.4752 16.9096 17.65 16.76V16.76C17.8642 16.5766 18 16.3042 18 16C18 15.6959 17.8642 15.4234 17.65 15.24V15.24C17.6281 15.2213 17.6055 15.2035 17.582 15.1868C17.4656 15.1033 17.3305 15.0442 17.1842 15.0169C17.1245 15.0058 17.0629 15 17 15C16.4477 15 16 15.4477 16 16C16 16.3351 16.1649 16.6318 16.4179 16.8132ZM16.35 13.7932C15.3963 14.0736 14.7 14.9555 14.7 16C14.7 17.0445 15.3963 17.9264 16.35 18.2069L16.35 20C16.35 20.359 16.641 20.65 17 20.65C17.359 20.65 17.65 20.359 17.65 20L17.65 18.2069C18.6037 17.9264 19.3 17.0445 19.3 16C19.3 14.9555 18.6037 14.0736 17.65 13.7931L17.65 4.00001C17.65 3.64102 17.359 3.35001 17 3.35001C16.641 3.35001 16.35 3.64102 16.35 4.00001L16.35 13.7932Z" fill="currentColor"/>
                     <path fillRule="evenodd" clipRule="evenodd" d="M11.4904 8.86059C11.5549 8.89885 11.624 8.93007 11.6967 8.95319C11.7924 8.9836 11.8943 9 12 9C12.2481 9 12.4752 8.90961 12.65 8.75997V8.76C12.8642 8.57659 13 8.30416 13 8.00001C13 7.69586 12.8642 7.42343 12.65 7.24002V7.24003C12.5844 7.18392 12.5115 7.13613 12.4329 7.09832C12.4054 7.0851 12.3773 7.07311 12.3485 7.0624C12.24 7.02205 12.1226 7.00001 12 7.00001C11.4477 7.00001 11 7.44773 11 8.00001C11 8.36617 11.1968 8.68636 11.4904 8.86059ZM11.35 5.79316C10.3963 6.07363 9.70001 6.95551 9.70001 8.00001C9.70001 9.04452 10.3963 9.9264 11.35 10.2069L11.35 20C11.35 20.359 11.641 20.65 12 20.65C12.359 20.65 12.65 20.359 12.65 20L12.65 10.2069C13.6037 9.92644 14.3 9.04454 14.3 8.00001C14.3 6.95548 13.6037 6.07358 12.65 5.79313L12.65 4.00001C12.65 3.64102 12.359 3.35001 12 3.35001C11.641 3.35001 11.35 3.64102 11.35 4.00001L11.35 5.79316Z" fill="currentColor"/>
                   </svg>
-                  <span>Prompt Testing</span>
+                  <span>{t('nav.promptTesting')}</span>
                 </a>
                 <a
                   href="/usage-analytics"
@@ -809,14 +835,16 @@ export default function Home() {
                     <path d="M3 3V21H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     <path d="M7 16L12 11L16 15L21 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
-                  <span>Usage Analytics</span>
+                  <span>{t('nav.usageAnalytics')}</span>
                 </a>
               </div>
             </div>
           )}
         </nav>
-        {/* User Menu at Bottom */}
-        <UserMenu />
+        {/* User Menu at Bottom with Language Toggle */}
+        <div className="mt-auto">
+          <UserMenu language={language} onLanguageChange={setLanguage} />
+        </div>
       </aside>
 
       {/* Main Content */}
@@ -825,13 +853,13 @@ export default function Home() {
           {/* Recent Results View - Show first if selected */}
           {showRecentResults && !diagnosticResult && (
             <div className="mb-6">
-              <h1 className="text-3xl font-bold mb-6 text-gray-900">Recent Diagnostics</h1>
+              <h1 className="text-3xl font-bold mb-6 text-gray-900">{t('recent.title')}</h1>
               
               {/* Filter Controls */}
               <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                   {/* My Diagnostics Toggle */}
-                  <div className="flex items-center">
+                  <div className="flex items-center h-[38px]">
                     <label className="flex items-center cursor-pointer">
                       <input
                         type="checkbox"
@@ -839,41 +867,41 @@ export default function Home() {
                         onChange={(e) => setShowMyDiagnostics(e.target.checked)}
                         className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                       />
-                      <span className="ml-2 text-sm font-medium text-gray-700">My Diagnostics</span>
+                      <span className="ml-2 text-sm font-medium text-gray-900">{t('recent.myDiagnostics')}</span>
                     </label>
                   </div>
                   
                   {/* Start Date Filter */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Start Date</label>
+                    <label className="block text-xs font-medium text-gray-900 mb-1">{t('recent.startDate')}</label>
                     <input
                       type="date"
                       value={dateFilterStart}
                       onChange={(e) => setDateFilterStart(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   
                   {/* End Date Filter */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">End Date</label>
+                    <label className="block text-xs font-medium text-gray-900 mb-1">{t('recent.endDate')}</label>
                     <input
                       type="date"
                       value={dateFilterEnd}
                       onChange={(e) => setDateFilterEnd(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   
                   {/* Unit Name Filter */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Unit Name</label>
+                    <label className="block text-xs font-medium text-gray-900 mb-1">{t('recent.unitName')}</label>
                     <input
                       type="text"
                       value={unitFilter}
                       onChange={(e) => setUnitFilter(e.target.value)}
-                      placeholder="Search by unit name..."
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder={t('recent.searchByUnitName')}
+                      className="w-full px-3 py-2 text-sm text-gray-900 placeholder-gray-500 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -890,20 +918,20 @@ export default function Home() {
                       }}
                       className="text-sm text-blue-600 hover:text-blue-800"
                     >
-                      Clear Filters
+                      {t('actions.clearFilters')}
                     </button>
                   </div>
                 )}
               </div>
               
               <div className="mb-4 text-sm text-gray-600">
-                Found {recentResults.length} diagnostic{recentResults.length !== 1 ? 's' : ''} for {COUNTRIES.find(c => c.code === country)?.name}
+                {recentResults.length} {t('recent.foundDiagnostics')}{language === 'en' ? ` for ${COUNTRIES.find(c => c.code === country)?.name}` : ''}
               </div>
               {recentResults.length === 0 ? (
                 <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 text-center text-gray-500">
-                  <p className="mb-2">No recent diagnostics found</p>
+                  <p className="mb-2">{t('recent.noDiagnosticsYet')}</p>
                   <p className="text-xs text-gray-400">
-                    Generate a diagnostic report to see it here. Reports are stored for 7 days.
+                    {t('recent.tryAdjustingFilters')}
                   </p>
                 </div>
               ) : (
@@ -941,7 +969,7 @@ export default function Home() {
                                   <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-500">
                                     <path fillRule="evenodd" clipRule="evenodd" d="M14.15 0C14.509 0 14.8 0.291015 14.8 0.65L14.799 1.5H16.65C18.1136 1.5 19.3 2.68645 19.3 4.15V17.15C19.3 18.6136 18.1136 19.8 16.65 19.8H2.65C1.18645 19.8 0 18.6136 0 17.15V4.15C0 2.68645 1.18645 1.5 2.65 1.5H4.5V0.65C4.5 0.291015 4.79102 0 5.15 0C5.50899 0 5.8 0.291015 5.8 0.65V1.5H13.5V0.65C13.5 0.291015 13.791 0 14.15 0ZM18 7.299H1.3V17.15C1.3 17.8956 1.90442 18.5 2.65 18.5H16.65C17.3956 18.5 18 17.8956 18 17.15V7.299ZM6.15 14C6.50899 14 6.8 14.291 6.8 14.65C6.8 15.009 6.50899 15.3 6.15 15.3H4.65C4.29102 15.3 4 15.009 4 14.65C4 14.291 4.29102 14 4.65 14H6.15ZM10.4 14C10.759 14 11.05 14.291 11.05 14.65C11.05 15.009 10.759 15.3 10.4 15.3H8.9C8.54101 15.3 8.25 15.009 8.25 14.65C8.25 14.291 8.54101 14 8.9 14H10.4ZM14.65 14C15.009 14 15.3 14.291 15.3 14.65C15.3 15.009 15.009 15.3 14.65 15.3H13.15C12.791 15.3 12.5 15.009 12.5 14.65C12.5 14.291 12.791 14 13.15 14H14.65ZM10.4 10C10.759 10 11.05 10.291 11.05 10.65C11.05 11.009 10.759 11.3 10.4 11.3H8.9C8.54101 11.3 8.25 11.009 8.25 10.65C8.25 10.291 8.54101 10 8.9 10H10.4ZM6.15 10C6.50899 10 6.8 10.291 6.8 10.65C6.8 11.009 6.50899 11.3 6.15 11.3H4.65C4.29102 11.3 4 11.009 4 10.65C4 10.291 4.29102 10 4.65 10H6.15ZM14.65 10C15.009 10 15.3 10.291 15.3 10.65C15.3 11.009 15.009 11.3 14.65 11.3H13.15C12.791 11.3 12.5 11.009 12.5 10.65C12.5 10.291 12.791 10 13.15 10H14.65ZM4.5 2.8H2.65C1.90442 2.8 1.3 3.40442 1.3 4.15V5.999H18V4.15C18 3.40442 17.3956 2.8 16.65 2.8H14.799L14.8 3.65C14.8 4.00899 14.509 4.3 14.15 4.3C13.791 4.3 13.5 4.00899 13.5 3.65V2.8H5.8V3.65C5.8 4.00899 5.50899 4.3 5.15 4.3C4.79102 4.3 4.5 4.00899 4.5 3.65V2.8Z" fill="currentColor"/>
                                   </svg>
-                                  <span>{result.visitReports.length} visit{result.visitReports.length !== 1 ? 's' : ''}</span>
+                                  <span>{result.visitReports.length} {result.visitReports.length === 1 ? t('results.visit') : t('results.visits')}</span>
                                 </span>
                               )}
                               
@@ -951,7 +979,7 @@ export default function Home() {
                                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-500">
                                     <path fillRule="evenodd" clipRule="evenodd" d="M11.1898 5C13.3145 5 15.2071 6.34269 15.909 8.34799L16.8257 10.9666L19.3295 11.2309C21.4162 11.4511 23 13.2109 23 15.3091V17C23 18.1046 22.1046 19 21 19L20.6105 19.0005C20.3707 20.5023 19.0694 21.65 17.5 21.65C15.9303 21.65 14.6287 20.5018 14.3894 18.9995H9.61062C9.37128 20.5018 8.06973 21.65 6.5 21.65C4.93062 21.65 3.62929 20.5023 3.38954 19.0005L3 19C1.89543 19 1 18.1046 1 17V7.5C1 6.11929 2.11929 5 3.5 5H11.1898ZM6.5 16.65C5.47827 16.65 4.65 17.4783 4.65 18.5C4.65 19.5217 5.47827 20.35 6.5 20.35C7.52173 20.35 8.35 19.5217 8.35 18.5C8.35 17.4783 7.52173 16.65 6.5 16.65ZM17.5 16.65C16.4783 16.65 15.65 17.4783 15.65 18.5C15.65 19.5217 16.4783 20.35 17.5 20.35C18.5217 20.35 19.35 19.5217 19.35 18.5C19.35 17.4783 18.5217 16.65 17.5 16.65ZM8.772 6.3H3.5C2.83726 6.3 2.3 6.83726 2.3 7.5V17C2.3 17.3866 2.6134 17.7 3 17.7L3.4525 17.6999C3.80654 16.3477 5.03676 15.35 6.5 15.35C7.96324 15.35 9.19345 16.3477 9.54749 17.6999H14.4525C14.8065 16.3477 16.0368 15.35 17.5 15.35C18.9632 15.35 20.1935 16.3477 20.5475 17.6999L21 17.7C21.3866 17.7 21.7 17.3866 21.7 17V15.3091L21.694 15.15H20C19.6737 15.15 19.4035 14.9095 19.357 14.5961L19.35 14.5C19.35 14.141 19.641 13.85 20 13.85L21.2902 13.8501C20.8491 13.1283 20.089 12.6183 19.1931 12.5237L15.8707 12.173L15.863 12.153L10.3078 11.7645C9.49422 11.7075 8.85253 11.0674 8.77985 10.2698L8.77299 10.1185L8.772 6.3ZM11.1898 6.3H10.072L10.073 10.1185C10.073 10.2761 10.1775 10.4106 10.3228 10.4539L10.3986 10.4676L15.396 10.817L14.682 8.77751C14.1626 7.29359 12.7621 6.3 11.1898 6.3ZM8.25 2.5C8.94036 2.5 9.5 3.05964 9.5 3.75V4.16667H7V3.75C7 3.05964 7.55964 2.5 8.25 2.5Z" fill="currentColor"/>
                                   </svg>
-                                  <span>{result.breakdowns.length} breakdown{result.breakdowns.length !== 1 ? 's' : ''}</span>
+                                  <span>{result.breakdowns.length} {result.breakdowns.length === 1 ? t('results.breakdown') : t('results.breakdowns')}</span>
                                 </span>
                               )}
                               
@@ -970,7 +998,7 @@ export default function Home() {
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-500">
                                       <path fillRule="evenodd" clipRule="evenodd" d="M15.8448 2.35001C16.7222 2.35001 17.5732 2.54526 18.3484 2.91629L19.1768 3.31283L15.3995 7.08966L16.9103 8.60053L20.6872 4.82315L21.0837 5.65161C21.4547 6.42677 21.65 7.27777 21.65 8.1552C21.65 11.3613 19.0509 13.9604 15.8448 13.9604C15.4622 13.9604 15.0842 13.9233 14.7147 13.8503L7.85983 20.7047C6.59938 21.9651 4.55577 21.9651 3.29532 20.7047C2.03486 19.4442 2.03486 17.4006 3.2953 16.1402L10.1496 9.28525L10.1017 9.0066C10.0605 8.72647 10.0396 8.44212 10.0396 8.1552C10.0396 4.94908 12.6387 2.35001 15.8448 2.35001ZM15.8448 3.65001C13.3566 3.65001 11.3396 5.66705 11.3396 8.1552C11.3396 8.55382 11.3912 8.94501 11.492 9.32217L11.5889 9.68445L4.21456 17.0594C3.46178 17.8122 3.46178 19.0327 4.21456 19.7854C4.96733 20.5382 6.18782 20.5382 6.94061 19.7854L14.3155 12.4111L14.6778 12.508C15.055 12.6088 15.4462 12.6604 15.8448 12.6604C18.3329 12.6604 20.35 10.6433 20.35 8.1552C20.35 7.80192 20.3094 7.45475 20.2303 7.11866L16.9104 10.4391L13.5609 7.08959L16.8813 3.76966C16.5452 3.69058 16.1981 3.65001 15.8448 3.65001ZM5.74998 17.5C6.16419 17.5 6.49998 17.8358 6.49998 18.25C6.49998 18.6642 6.16419 19 5.74998 19C5.33576 19 4.99998 18.6642 4.99998 18.25C4.99998 17.8358 5.33576 17.5 5.74998 17.5Z" fill="currentColor"/>
                                     </svg>
-                                    <span>{uniqueCount} repair request{uniqueCount !== 1 ? 's' : ''}</span>
+                                    <span>{uniqueCount} {uniqueCount === 1 ? t('results.repairRequest') : t('results.repairRequests')}</span>
                                   </span>
                                 ) : null
                               })()}
@@ -981,7 +1009,7 @@ export default function Home() {
                                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-500">
                                     <path fillRule="evenodd" clipRule="evenodd" d="M15.2999 2.9218L16.0323 3.22518C16.8495 3.56367 17.2544 4.48633 16.9504 5.31666L16.4572 6.6653C16.7687 6.92547 17.0561 7.21211 17.3166 7.52183L18.6673 7.0287C19.4973 6.72533 20.419 7.12978 20.7577 7.94601L21.0609 8.6765C21.4002 9.49427 21.0336 10.4341 20.2303 10.8061L18.9262 11.4103C18.9601 11.8051 18.9602 12.2025 18.9259 12.5984L20.2339 13.2058C21.0364 13.578 21.4026 14.5168 21.0641 15.334L20.7621 16.063C20.4236 16.8802 19.5008 17.2851 18.6704 16.9809L17.3123 16.4839C17.0575 16.7859 16.7777 17.0649 16.4761 17.3184L16.9731 18.6728C17.2781 19.504 16.8727 20.4278 16.0545 20.7661L15.3236 21.0682C14.9565 21.22 14.5534 21.2332 14.1478 21.1L14.0064 21.0437C13.652 20.8816 13.3642 20.599 13.1969 20.2388L12.5868 18.9265C12.1937 18.9601 11.798 18.9601 11.4038 18.9261L10.7964 20.235C10.4241 21.0374 9.48536 21.4035 8.66817 21.065L7.93575 20.7616C7.11856 20.4232 6.71365 19.5005 7.01767 18.6702L7.51457 17.3111C7.21691 17.0598 6.94159 16.7842 6.69105 16.4873L5.32772 16.9851C4.4977 17.2884 3.57604 16.884 3.23732 16.0678L2.93418 15.3373C2.59482 14.5195 2.96138 13.5797 3.76463 13.2077L5.07467 12.6005C5.04022 12.2067 5.03949 11.8103 5.07293 11.4153L3.76109 10.8062C2.95862 10.434 2.59244 9.49517 2.93095 8.67792L3.2329 7.94896C3.57142 7.13171 4.49418 6.72681 5.32462 7.03099L6.67887 7.52657C6.93319 7.22391 7.21257 6.94423 7.51388 6.69006L7.01926 5.34183C6.71425 4.51065 7.11962 3.58688 7.93783 3.24859L8.66872 2.94641C9.48539 2.60876 10.4231 2.97448 10.7955 3.77593L11.399 5.07475C11.6881 5.04943 11.9788 5.04229 12.2692 5.05352L12.5595 5.07087L13.1717 3.75177C13.544 2.94941 14.4827 2.58331 15.2999 2.9218ZM14.3509 4.29898L13.3353 6.48733L12.8526 6.41324C12.274 6.3244 11.6872 6.32714 11.1117 6.41939L10.6264 6.49716L9.61655 4.32373C9.53756 4.15373 9.33865 4.07615 9.16542 4.14777L8.43453 4.44996C8.26097 4.52172 8.17498 4.71767 8.2397 4.89403L9.06596 7.14625L8.6693 7.43501C8.19286 7.78185 7.77326 8.20129 7.426 8.68077L7.13772 9.0788L4.87768 8.25174C4.70149 8.1872 4.50575 8.27309 4.43394 8.44645L4.132 9.17541C4.06019 9.34877 4.13787 9.54791 4.30832 9.62697L6.4929 10.6413L6.4166 11.1255C6.32432 11.7112 6.32594 12.3055 6.41935 12.8883L6.4972 13.3741L4.31109 14.3872C4.14067 14.4662 4.06291 14.6655 4.1349 14.839L4.43804 15.5695C4.50989 15.7426 4.70539 15.8284 4.88168 15.764L7.14788 14.9366L7.4362 15.3324C7.7801 15.8044 8.19528 16.2206 8.66954 16.5659L9.06572 16.8543L8.23852 19.1169C8.17401 19.2931 8.2599 19.4888 8.43324 19.5606L9.16566 19.864C9.33901 19.9358 9.53813 19.8581 9.61712 19.6879L10.6303 17.5045L11.1155 17.5818C11.7002 17.675 12.2937 17.6746 12.8759 17.5826L13.3601 17.5061L14.3758 19.6909C14.4115 19.7679 14.4717 19.827 14.513 19.8471L14.5851 19.8764C14.6641 19.9021 14.7484 19.8993 14.8269 19.8669L15.5578 19.5647C15.7313 19.4929 15.8173 19.297 15.7526 19.1207L14.9232 16.8604L15.3213 16.5718C15.7984 16.226 16.2187 15.8075 16.5669 15.329L16.8554 14.9324L19.1174 15.7602C19.2935 15.8247 19.4893 15.7388 19.5611 15.5655L19.863 14.8365C19.9348 14.6632 19.8572 14.464 19.6867 14.385L17.504 13.3715L17.5815 12.8863C17.6752 12.2999 17.6747 11.7048 17.5821 11.121L17.5052 10.6359L19.6839 9.62652C19.8544 9.5476 19.9321 9.34824 19.8601 9.17478L19.557 8.44428C19.4851 8.27114 19.2896 8.18535 19.1134 8.24978L16.8581 9.07317L16.5699 8.67612C16.2185 8.19191 15.7923 7.76623 15.3043 7.41524L14.904 7.12736L15.7295 4.86992C15.7941 4.69374 15.7082 4.49802 15.5348 4.42622L14.8024 4.12284C14.6291 4.05104 14.4299 4.1287 14.3509 4.29898ZM13.3968 8.62786C15.2592 9.39929 16.1436 11.5344 15.3721 13.3968C14.6007 15.2592 12.4656 16.1436 10.6032 15.3722C8.74079 14.6007 7.85639 12.4656 8.62782 10.6032C9.39925 8.74083 11.5344 7.85643 13.3968 8.62786ZM9.82886 11.1007C9.33219 12.2998 9.9016 13.6745 11.1007 14.1711C12.2997 14.6678 13.6744 14.0984 14.1711 12.8993C14.6678 11.7002 14.0984 10.3256 12.8993 9.8289C11.7002 9.33223 10.3255 9.90164 9.82886 11.1007Z" fill="currentColor"/>
                                   </svg>
-                                  <span>{result.analysis.partsReplaced.length} part{result.analysis.partsReplaced.length !== 1 ? 's' : ''} replaced</span>
+                                  <span>{result.analysis.partsReplaced.length} {result.analysis.partsReplaced.length === 1 ? t('results.partReplaced') : t('results.partsReplaced')}</span>
                                 </span>
                               )}
                             </div>
@@ -1033,12 +1061,12 @@ export default function Home() {
           {/* Diagnostic Form - Only show when not viewing recent results and no diagnostic result */}
           {!showRecentResults && !diagnosticResult && (
             <>
-              <h1 className="text-3xl font-bold mb-8 text-gray-900">Lift Diagnostic Summary</h1>
+              <h1 className="text-3xl font-bold mb-8 text-gray-900">{t('page.liftDiagnosticSummary')}</h1>
       
       {/* Building Selection */}
           <div className="mb-6 relative">
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-700">Building</label>
+              <label className="block text-sm font-medium text-gray-700">{t('form.building')}</label>
               {dataLoading && (
                 <span className="text-xs text-gray-500 flex items-center gap-1">
                   <svg className="animate-spin h-3 w-3 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -1050,7 +1078,7 @@ export default function Home() {
               )}
               {!dataLoading && data?.buildings && (
                 <span className="text-xs text-gray-500">
-                  {data.buildings.length} building{data.buildings.length !== 1 ? 's' : ''} in {COUNTRIES.find(c => c.code === country)?.name}
+                  {data.buildings.length} {t('form.buildingsIn')} {COUNTRIES.find(c => c.code === country)?.name}
                 </span>
               )}
             </div>
@@ -1075,7 +1103,7 @@ export default function Home() {
                     setShowBuildingDropdown(true)
                   }
                 }}
-                placeholder={`Type building name or address... (${COUNTRIES.find(c => c.code === country)?.name})`}
+                placeholder={`${t('form.typeBuildingName')} (${COUNTRIES.find(c => c.code === country)?.name})`}
                 className="w-full p-3 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               {showBuildingDropdown && data?.buildings && (
@@ -1108,14 +1136,14 @@ export default function Home() {
             </div>
             {selectedBuilding && (
               <p className="text-xs text-gray-500 mt-1">
-                Selected: {selectedBuilding.name}
+                {t('form.selected')}: {selectedBuilding.name}
               </p>
             )}
       </div>
       
           {/* Device Selection */}
           <div className="mb-6 relative">
-            <label className="block text-sm font-medium mb-2 text-gray-700">Device</label>
+            <label className="block text-sm font-medium mb-2 text-gray-700">{t('form.device')}</label>
             <div className="relative" ref={deviceDropdownRef}>
               <input
                 ref={deviceInputRef}
@@ -1143,7 +1171,7 @@ export default function Home() {
                     }
                   }
                 }}
-                placeholder={selectedBuildingId ? "Type device name..." : "Select a building first"}
+                placeholder={selectedBuildingId ? t('form.typeDeviceName') : t('form.selectBuildingFirst')}
                 className={`w-full p-3 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${!selectedBuildingId ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
                 disabled={!selectedBuildingId}
               />
@@ -1181,7 +1209,7 @@ export default function Home() {
             </div>
             {selectedDevice && (
               <p className="text-xs text-gray-500 mt-1">
-                Selected: {selectedDevice.name}
+                {t('form.selected')}: {selectedDevice.name}
               </p>
             )}
       </div>
@@ -1189,16 +1217,16 @@ export default function Home() {
       {/* Context Input */}
       <div className="mb-6">
         <label className="block text-sm font-medium mb-1 text-gray-700">
-          What are you looking for? (Optional)
+                  {t('form.whatLookingFor')} ({t('form.optional')})
         </label>
         <p className="text-xs text-gray-500 italic mb-2">
-          Default Diagnostic Period: last 3 months
+          {t('form.defaultPeriod')}
         </p>
         <textarea
           value={context}
           onChange={(e) => setContext(e.target.value)}
-          placeholder="e.g. change diagnostic period, dig into the recurring car door issues, general overview of recent failures..."
-          className="w-full p-3 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+          placeholder={t('form.examplePlaceholder')}
+                  className="w-full p-3 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
           rows={3}
         />
       </div>
@@ -1211,7 +1239,7 @@ export default function Home() {
                     disabled={!selectedBuildingId || !selectedDeviceId || isLoading}
                     className="w-full py-3 px-4 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                   >
-                    {isLoading ? 'Analyzing...' : 'Launch Diagnostic'}
+                    {isLoading ? t('status.analyzing') : t('actions.analyze')}
       </button>
       
                   {isLoading && (
@@ -1226,8 +1254,8 @@ export default function Home() {
                           />
                         </div>
                       </div>
-                      <p className="text-gray-600 font-medium">Inspecting the unit, please wait...</p>
-                      <p className="text-sm text-gray-500 mt-2">This may take up to 20 seconds</p>
+                      <p className="text-gray-600 font-medium">{t('status.inspecting')}</p>
+                      <p className="text-sm text-gray-500 mt-2">{t('status.mayTakeTime')}</p>
         </div>
                   )}
                 </>
@@ -1253,7 +1281,7 @@ export default function Home() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                   </svg>
-                  Launch New Diagnostic
+                  {t('nav.newDiagnostic')}
                 </button>
                 <button
                   onClick={() => {
@@ -1266,7 +1294,7 @@ export default function Home() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  Recent Diagnostics
+                  {t('nav.recentDiagnostics')}
                 </button>
               </div>
               <button
@@ -1286,13 +1314,13 @@ export default function Home() {
             <div className="flex justify-between items-start mb-4">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                  Diagnostic Results
+                  {t('results.title')}
                 </h2>
                 <p className="text-sm text-gray-600">
                   {diagnosticResult.unitName} - {diagnosticResult.buildingName}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  Generated: {diagnosticResult.generatedAt.toLocaleString()}
+                  {t('results.generated')}: {diagnosticResult.generatedAt.toLocaleString()}
                 </p>
               </div>
             </div>
@@ -1317,7 +1345,7 @@ export default function Home() {
                         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-500">
                           <path fillRule="evenodd" clipRule="evenodd" d="M14.15 0C14.509 0 14.8 0.291015 14.8 0.65L14.799 1.5H16.65C18.1136 1.5 19.3 2.68645 19.3 4.15V17.15C19.3 18.6136 18.1136 19.8 16.65 19.8H2.65C1.18645 19.8 0 18.6136 0 17.15V4.15C0 2.68645 1.18645 1.5 2.65 1.5H4.5V0.65C4.5 0.291015 4.79102 0 5.15 0C5.50899 0 5.8 0.291015 5.8 0.65V1.5H13.5V0.65C13.5 0.291015 13.791 0 14.15 0ZM18 7.299H1.3V17.15C1.3 17.8956 1.90442 18.5 2.65 18.5H16.65C17.3956 18.5 18 17.8956 18 17.15V7.299ZM6.15 14C6.50899 14 6.8 14.291 6.8 14.65C6.8 15.009 6.50899 15.3 6.15 15.3H4.65C4.29102 15.3 4 15.009 4 14.65C4 14.291 4.29102 14 4.65 14H6.15ZM10.4 14C10.759 14 11.05 14.291 11.05 14.65C11.05 15.009 10.759 15.3 10.4 15.3H8.9C8.54101 15.3 8.25 15.009 8.25 14.65C8.25 14.291 8.54101 14 8.9 14H10.4ZM14.65 14C15.009 14 15.3 14.291 15.3 14.65C15.3 15.009 15.009 15.3 14.65 15.3H13.15C12.791 15.3 12.5 15.009 12.5 14.65C12.5 14.291 12.791 14 13.15 14H14.65ZM10.4 10C10.759 10 11.05 10.291 11.05 10.65C11.05 11.009 10.759 11.3 10.4 11.3H8.9C8.54101 11.3 8.25 11.009 8.25 10.65C8.25 10.291 8.54101 10 8.9 10H10.4ZM6.15 10C6.50899 10 6.8 10.291 6.8 10.65C6.8 11.009 6.50899 11.3 6.15 11.3H4.65C4.29102 11.3 4 11.009 4 10.65C4 10.291 4.29102 10 4.65 10H6.15ZM14.65 10C15.009 10 15.3 10.291 15.3 10.65C15.3 11.009 15.009 11.3 14.65 11.3H13.15C12.791 11.3 12.5 11.009 12.5 10.65C12.5 10.291 12.791 10 13.15 10H14.65ZM4.5 2.8H2.65C1.90442 2.8 1.3 3.40442 1.3 4.15V5.999H18V4.15C18 3.40442 17.3956 2.8 16.65 2.8H14.799L14.8 3.65C14.8 4.00899 14.509 4.3 14.15 4.3C13.791 4.3 13.5 4.00899 13.5 3.65V2.8H5.8V3.65C5.8 4.00899 5.50899 4.3 5.15 4.3C4.79102 4.3 4.5 4.00899 4.5 3.65V2.8Z" fill="currentColor"/>
                         </svg>
-                        <span className="font-medium">{diagnosticResult.visitReports.length} visit{diagnosticResult.visitReports.length !== 1 ? 's' : ''}</span>
+                        <span className="font-medium">{diagnosticResult.visitReports.length} {diagnosticResult.visitReports.length === 1 ? t('results.visit') : t('results.visits')}</span>
                       </span>
                     )}
                     
@@ -1327,7 +1355,7 @@ export default function Home() {
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-500">
                           <path fillRule="evenodd" clipRule="evenodd" d="M11.1898 5C13.3145 5 15.2071 6.34269 15.909 8.34799L16.8257 10.9666L19.3295 11.2309C21.4162 11.4511 23 13.2109 23 15.3091V17C23 18.1046 22.1046 19 21 19L20.6105 19.0005C20.3707 20.5023 19.0694 21.65 17.5 21.65C15.9303 21.65 14.6287 20.5018 14.3894 18.9995H9.61062C9.37128 20.5018 8.06973 21.65 6.5 21.65C4.93062 21.65 3.62929 20.5023 3.38954 19.0005L3 19C1.89543 19 1 18.1046 1 17V7.5C1 6.11929 2.11929 5 3.5 5H11.1898ZM6.5 16.65C5.47827 16.65 4.65 17.4783 4.65 18.5C4.65 19.5217 5.47827 20.35 6.5 20.35C7.52173 20.35 8.35 19.5217 8.35 18.5C8.35 17.4783 7.52173 16.65 6.5 16.65ZM17.5 16.65C16.4783 16.65 15.65 17.4783 15.65 18.5C15.65 19.5217 16.4783 20.35 17.5 20.35C18.5217 20.35 19.35 19.5217 19.35 18.5C19.35 17.4783 18.5217 16.65 17.5 16.65ZM8.772 6.3H3.5C2.83726 6.3 2.3 6.83726 2.3 7.5V17C2.3 17.3866 2.6134 17.7 3 17.7L3.4525 17.6999C3.80654 16.3477 5.03676 15.35 6.5 15.35C7.96324 15.35 9.19345 16.3477 9.54749 17.6999H14.4525C14.8065 16.3477 16.0368 15.35 17.5 15.35C18.9632 15.35 20.1935 16.3477 20.5475 17.6999L21 17.7C21.3866 17.7 21.7 17.3866 21.7 17V15.3091L21.694 15.15H20C19.6737 15.15 19.4035 14.9095 19.357 14.5961L19.35 14.5C19.35 14.141 19.641 13.85 20 13.85L21.2902 13.8501C20.8491 13.1283 20.089 12.6183 19.1931 12.5237L15.8707 12.173L15.863 12.153L10.3078 11.7645C9.49422 11.7075 8.85253 11.0674 8.77985 10.2698L8.77299 10.1185L8.772 6.3ZM11.1898 6.3H10.072L10.073 10.1185C10.073 10.2761 10.1775 10.4106 10.3228 10.4539L10.3986 10.4676L15.396 10.817L14.682 8.77751C14.1626 7.29359 12.7621 6.3 11.1898 6.3ZM8.25 2.5C8.94036 2.5 9.5 3.05964 9.5 3.75V4.16667H7V3.75C7 3.05964 7.55964 2.5 8.25 2.5Z" fill="currentColor"/>
                         </svg>
-                        <span className="font-medium">{diagnosticResult.breakdowns.length} breakdown{diagnosticResult.breakdowns.length !== 1 ? 's' : ''}</span>
+                        <span className="font-medium">{diagnosticResult.breakdowns.length} {diagnosticResult.breakdowns.length === 1 ? t('results.breakdown') : t('results.breakdowns')}</span>
                       </span>
                     )}
                     
@@ -1337,7 +1365,7 @@ export default function Home() {
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-500">
                           <path fillRule="evenodd" clipRule="evenodd" d="M15.8448 2.35001C16.7222 2.35001 17.5732 2.54526 18.3484 2.91629L19.1768 3.31283L15.3995 7.08966L16.9103 8.60053L20.6872 4.82315L21.0837 5.65161C21.4547 6.42677 21.65 7.27777 21.65 8.1552C21.65 11.3613 19.0509 13.9604 15.8448 13.9604C15.4622 13.9604 15.0842 13.9233 14.7147 13.8503L7.85983 20.7047C6.59938 21.9651 4.55577 21.9651 3.29532 20.7047C2.03486 19.4442 2.03486 17.4006 3.2953 16.1402L10.1496 9.28525L10.1017 9.0066C10.0605 8.72647 10.0396 8.44212 10.0396 8.1552C10.0396 4.94908 12.6387 2.35001 15.8448 2.35001ZM15.8448 3.65001C13.3566 3.65001 11.3396 5.66705 11.3396 8.1552C11.3396 8.55382 11.3912 8.94501 11.492 9.32217L11.5889 9.68445L4.21456 17.0594C3.46178 17.8122 3.46178 19.0327 4.21456 19.7854C4.96733 20.5382 6.18782 20.5382 6.94061 19.7854L14.3155 12.4111L14.6778 12.508C15.055 12.6088 15.4462 12.6604 15.8448 12.6604C18.3329 12.6604 20.35 10.6433 20.35 8.1552C20.35 7.80192 20.3094 7.45475 20.2303 7.11866L16.9104 10.4391L13.5609 7.08959L16.8813 3.76966C16.5452 3.69058 16.1981 3.65001 15.8448 3.65001ZM5.74998 17.5C6.16419 17.5 6.49998 17.8358 6.49998 18.25C6.49998 18.6642 6.16419 19 5.74998 19C5.33576 19 4.99998 18.6642 4.99998 18.25C4.99998 17.8358 5.33576 17.5 5.74998 17.5Z" fill="currentColor"/>
                         </svg>
-                        <span className="font-medium">{uniqueRepairRequests} repair request{uniqueRepairRequests !== 1 ? 's' : ''}</span>
+                        <span className="font-medium">{uniqueRepairRequests} {uniqueRepairRequests === 1 ? t('results.repairRequest') : t('results.repairRequests')}</span>
                       </span>
                     )}
                     
@@ -1347,7 +1375,7 @@ export default function Home() {
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-500">
                           <path fillRule="evenodd" clipRule="evenodd" d="M15.2999 2.9218L16.0323 3.22518C16.8495 3.56367 17.2544 4.48633 16.9504 5.31666L16.4572 6.6653C16.7687 6.92547 17.0561 7.21211 17.3166 7.52183L18.6673 7.0287C19.4973 6.72533 20.419 7.12978 20.7577 7.94601L21.0609 8.6765C21.4002 9.49427 21.0336 10.4341 20.2303 10.8061L18.9262 11.4103C18.9601 11.8051 18.9602 12.2025 18.9259 12.5984L20.2339 13.2058C21.0364 13.578 21.4026 14.5168 21.0641 15.334L20.7621 16.063C20.4236 16.8802 19.5008 17.2851 18.6704 16.9809L17.3123 16.4839C17.0575 16.7859 16.7777 17.0649 16.4761 17.3184L16.9731 18.6728C17.2781 19.504 16.8727 20.4278 16.0545 20.7661L15.3236 21.0682C14.9565 21.22 14.5534 21.2332 14.1478 21.1L14.0064 21.0437C13.652 20.8816 13.3642 20.599 13.1969 20.2388L12.5868 18.9265C12.1937 18.9601 11.798 18.9601 11.4038 18.9261L10.7964 20.235C10.4241 21.0374 9.48536 21.4035 8.66817 21.065L7.93575 20.7616C7.11856 20.4232 6.71365 19.5005 7.01767 18.6702L7.51457 17.3111C7.21691 17.0598 6.94159 16.7842 6.69105 16.4873L5.32772 16.9851C4.4977 17.2884 3.57604 16.884 3.23732 16.0678L2.93418 15.3373C2.59482 14.5195 2.96138 13.5797 3.76463 13.2077L5.07467 12.6005C5.04022 12.2067 5.03949 11.8103 5.07293 11.4153L3.76109 10.8062C2.95862 10.434 2.59244 9.49517 2.93095 8.67792L3.2329 7.94896C3.57142 7.13171 4.49418 6.72681 5.32462 7.03099L6.67887 7.52657C6.93319 7.22391 7.21257 6.94423 7.51388 6.69006L7.01926 5.34183C6.71425 4.51065 7.11962 3.58688 7.93783 3.24859L8.66872 2.94641C9.48539 2.60876 10.4231 2.97448 10.7955 3.77593L11.399 5.07475C11.6881 5.04943 11.9788 5.04229 12.2692 5.05352L12.5595 5.07087L13.1717 3.75177C13.544 2.94941 14.4827 2.58331 15.2999 2.9218ZM14.3509 4.29898L13.3353 6.48733L12.8526 6.41324C12.274 6.3244 11.6872 6.32714 11.1117 6.41939L10.6264 6.49716L9.61655 4.32373C9.53756 4.15373 9.33865 4.07615 9.16542 4.14777L8.43453 4.44996C8.26097 4.52172 8.17498 4.71767 8.2397 4.89403L9.06596 7.14625L8.6693 7.43501C8.19286 7.78185 7.77326 8.20129 7.426 8.68077L7.13772 9.0788L4.87768 8.25174C4.70149 8.1872 4.50575 8.27309 4.43394 8.44645L4.132 9.17541C4.06019 9.34877 4.13787 9.54791 4.30832 9.62697L6.4929 10.6413L6.4166 11.1255C6.32432 11.7112 6.32594 12.3055 6.41935 12.8883L6.4972 13.3741L4.31109 14.3872C4.14067 14.4662 4.06291 14.6655 4.1349 14.839L4.43804 15.5695C4.50989 15.7426 4.70539 15.8284 4.88168 15.764L7.14788 14.9366L7.4362 15.3324C7.7801 15.8044 8.19528 16.2206 8.66954 16.5659L9.06572 16.8543L8.23852 19.1169C8.17401 19.2931 8.2599 19.4888 8.43324 19.5606L9.16566 19.864C9.33901 19.9358 9.53813 19.8581 9.61712 19.6879L10.6303 17.5045L11.1155 17.5818C11.7002 17.675 12.2937 17.6746 12.8759 17.5826L13.3601 17.5061L14.3758 19.6909C14.4115 19.7679 14.4717 19.827 14.513 19.8471L14.5851 19.8764C14.6641 19.9021 14.7484 19.8993 14.8269 19.8669L15.5578 19.5647C15.7313 19.4929 15.8173 19.297 15.7526 19.1207L14.9232 16.8604L15.3213 16.5718C15.7984 16.226 16.2187 15.8075 16.5669 15.329L16.8554 14.9324L19.1174 15.7602C19.2935 15.8247 19.4893 15.7388 19.5611 15.5655L19.863 14.8365C19.9348 14.6632 19.8572 14.464 19.6867 14.385L17.504 13.3715L17.5815 12.8863C17.6752 12.2999 17.6747 11.7048 17.5821 11.121L17.5052 10.6359L19.6839 9.62652C19.8544 9.5476 19.9321 9.34824 19.8601 9.17478L19.557 8.44428C19.4851 8.27114 19.2896 8.18535 19.1134 8.24978L16.8581 9.07317L16.5699 8.67612C16.2185 8.19191 15.7923 7.76623 15.3043 7.41524L14.904 7.12736L15.7295 4.86992C15.7941 4.69374 15.7082 4.49802 15.5348 4.42622L14.8024 4.12284C14.6291 4.05104 14.4299 4.1287 14.3509 4.29898ZM13.3968 8.62786C15.2592 9.39929 16.1436 11.5344 15.3721 13.3968C14.6007 15.2592 12.4656 16.1436 10.6032 15.3722C8.74079 14.6007 7.85639 12.4656 8.62782 10.6032C9.39925 8.74083 11.5344 7.85643 13.3968 8.62786ZM9.82886 11.1007C9.33219 12.2998 9.9016 13.6745 11.1007 14.1711C12.2997 14.6678 13.6744 14.0984 14.1711 12.8993C14.6678 11.7002 14.0984 10.3256 12.8993 9.8289C11.7002 9.33223 10.3255 9.90164 9.82886 11.1007Z" fill="currentColor"/>
                         </svg>
-                        <span className="font-medium">{diagnosticResult.analysis.partsReplaced.length} part{diagnosticResult.analysis.partsReplaced.length !== 1 ? 's' : ''} replaced</span>
+                        <span className="font-medium">{diagnosticResult.analysis.partsReplaced.length} {diagnosticResult.analysis.partsReplaced.length === 1 ? t('results.partReplaced') : t('results.partsReplaced')}</span>
                       </span>
                     )}
                   </div>
@@ -1366,7 +1394,7 @@ export default function Home() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  Analysis
+                  {t('tabs.analysis')}
                 </button>
                 <button
                   onClick={() => setActiveTab('summary')}
@@ -1376,7 +1404,7 @@ export default function Home() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  Timeline
+                  {t('tabs.timeline')}
                 </button>
                 <button
                   onClick={() => setActiveTab('visits')}
@@ -1386,7 +1414,7 @@ export default function Home() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  Visit Reports ({diagnosticResult.visitReports.length})
+                  {t('tabs.visitReports')} ({diagnosticResult.visitReports.length})
                 </button>
                 <button
                   onClick={() => setActiveTab('components')}
@@ -1396,7 +1424,7 @@ export default function Home() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  Components History
+                  {t('tabs.componentsHistory')}
                 </button>
               </nav>
               {/* Generate PDF Button - TEMPORARILY HIDDEN - Will be re-enabled later */}
@@ -1418,7 +1446,7 @@ export default function Home() {
                 {(diagnosticResult.visitReports.length > 0 || diagnosticResult.breakdowns.length > 0) && (
                   <div className="mb-6">
                     <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                      Last {getDaysBack(context)} days timeline
+                      {t('results.lastDaysTimeline').replace('{days}', String(getDaysBack(context)))}
                     </h3>
                     <div className="relative pl-8">
                       {/* Main continuous timeline line */}
@@ -1860,7 +1888,7 @@ export default function Home() {
                 {diagnosticResult.analysis?.finalExecSummary && (
                   <div className="mb-8 rounded-lg overflow-hidden border border-gray-200" style={{ background: 'linear-gradient(to bottom, rgba(216, 216, 239, 0.25) 0%, rgba(255, 255, 255, 0.1) 100%)' }}>
                     <div className="p-6">
-                      <h3 className="text-xl font-semibold text-gray-900 mb-3">Executive Summary</h3>
+                      <h3 className="text-xl font-semibold text-gray-900 mb-3">{t('analysis.executiveSummary')}</h3>
                       <p className="text-gray-700 leading-relaxed text-sm">
                         {diagnosticResult.analysis.finalExecSummary.replace(/at Unit /gi, '').replace(/at /gi, '')}
                       </p>
@@ -1873,25 +1901,25 @@ export default function Home() {
                   <div className="mb-12">
                     {/* Section Header */}
                     <div className="mb-6 rounded-lg p-5 flex items-center justify-between" style={{ backgroundColor: 'rgba(115, 161, 255, 0.15)' }}>
-                      <h3 className="text-xl font-semibold text-gray-900">Operational Summary</h3>
+                      <h3 className="text-xl font-semibold text-gray-900">{t('analysis.operationalSummary')}</h3>
                       <button
                         onClick={handleCopyOperationalSummary}
                         className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:text-gray-900 hover:bg-white/50 rounded transition-colors"
-                        title="Copy Operational Summary"
+                        title={t('actions.copy')}
                       >
                         {copiedSection === 'operational' ? (
                           <>
                             <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
-                            <span className="text-green-600 font-medium">Copied!</span>
+                            <span className="text-green-600">{t('actions.copied')}</span>
                           </>
                         ) : (
                           <>
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                             </svg>
-                            <span>Copy</span>
+                            <span>{t('actions.copy')}</span>
                           </>
                         )}
                       </button>
@@ -1903,7 +1931,7 @@ export default function Home() {
                         {diagnosticResult.analysis.executiveSummary.overview && (
                           <div className="rounded-lg border-t-2 border-[#73A1FF] shadow-sm hover:shadow-md transition-shadow" style={{ backgroundColor: 'rgba(115, 161, 255, 0.05)' }}>
                             <div className="p-5">
-                              <h4 className="text-lg font-semibold text-gray-900 mb-3">Overview</h4>
+                              <h4 className="text-lg font-semibold text-gray-900 mb-3">{t('analysis.overview')}</h4>
                               <p className="text-gray-700 leading-relaxed text-sm">
                                 {diagnosticResult.analysis.executiveSummary.overview.replace(/at Unit /gi, '').replace(/at /gi, '')}
                               </p>
@@ -1955,8 +1983,8 @@ export default function Home() {
                     ) : (
                       <div className="rounded-lg border-t-4 border-[#73A1FF] shadow-sm p-5" style={{ backgroundColor: 'rgba(115, 161, 255, 0.05)' }}>
                         <p className="text-gray-700 leading-relaxed text-sm">
-                          {diagnosticResult.analysis.executiveSummary.replace(/at Unit /gi, '').replace(/at /gi, '')}
-                        </p>
+                      {diagnosticResult.analysis.executiveSummary.replace(/at Unit /gi, '').replace(/at /gi, '')}
+                    </p>
                       </div>
                     )}
                   </div>
@@ -1967,7 +1995,7 @@ export default function Home() {
                   <div className="mb-12">
                     {/* Section Header */}
                     <div className="mb-6 rounded-lg p-5" style={{ backgroundColor: 'rgba(109, 112, 156, 0.15)' }}>
-                      <h3 className="text-xl font-semibold text-gray-900">Technical Summary</h3>
+                      <h3 className="text-xl font-semibold text-gray-900">{t('analysis.technicalSummary')}</h3>
                     </div>
                     
                     {/* Overview */}
@@ -1992,12 +2020,12 @@ export default function Home() {
                               {/* Quantified Impact */}
                               {pattern.quantifiedImpact && (
                                 <div className="mb-5 pb-5 border-b border-gray-200">
-                                  <h5 className="text-base font-semibold text-gray-900 mb-3">Quantified Impact</h5>
+                                  <h5 className="text-base font-semibold text-gray-900 mb-3">{t('analysis.quantifiedImpact')}</h5>
                                   <div className="text-sm text-gray-700 space-y-2">
-                                    <p><strong>Breakdowns:</strong> {pattern.quantifiedImpact.breakdownCount} over {pattern.quantifiedImpact.timeSpan}</p>
-                                    <p><strong>Downtime:</strong> {pattern.quantifiedImpact.downtimeHours} total ({pattern.quantifiedImpact.downtimePerEvent} per event)</p>
+                                    <p><strong>{t('analysis.breakdowns')}:</strong> {pattern.quantifiedImpact.breakdownCount} {t('analysis.timeSpan')} {pattern.quantifiedImpact.timeSpan}</p>
+                                    <p><strong>{t('analysis.downtime')}:</strong> {pattern.quantifiedImpact.downtimeHours} {t('analysis.total')} ({pattern.quantifiedImpact.downtimePerEvent} {t('analysis.perEvent')})</p>
                                     <div className="flex items-center gap-2">
-                                      <strong>Risk Level:</strong>
+                                      <strong>{t('analysis.riskLevel')}:</strong>
                                       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
                                         pattern.quantifiedImpact.riskLevel.toLowerCase() === 'high' 
                                           ? 'bg-red-100 text-red-800'
@@ -2016,7 +2044,7 @@ export default function Home() {
                               {/* Root Cause Analysis */}
                               {pattern.driverTree && (
                                 <div className="mb-5 pb-5 border-b border-gray-200">
-                                  <h5 className="text-base font-semibold text-gray-900 mb-2">Root Cause Analysis</h5>
+                                  <h5 className="text-base font-semibold text-gray-900 mb-2">{t('analysis.rootCauseAnalysis')}</h5>
                                   <p className="text-sm text-gray-700 mb-2">{pattern.driverTree.replace(/^Defective materials? →?\s*/i, '').replace(/^Defective materials? and \w+ →?\s*/i, '')}</p>
                                   {diagnosticResult.analysis?.hypotheses && diagnosticResult.analysis.hypotheses.length > 0 && (
                                     <div className="mt-3 pt-3 border-t border-gray-200">
@@ -2033,8 +2061,8 @@ export default function Home() {
                               {/* Actionable Recommendations */}
                               {pattern.actionableRecommendations && pattern.actionableRecommendations.length > 0 && (
                                 <div className="mb-5 pb-5 border-b border-gray-200">
-                                  <h5 className="text-base font-semibold text-gray-900 mb-3">Actionable Recommendations</h5>
-                                  <div className="space-y-3">
+                                  <h5 className="text-base font-semibold text-gray-900 mb-3">{t('analysis.actionableRecommendations')}</h5>
+                    <div className="space-y-3">
                                     {pattern.actionableRecommendations.map((rec: any, recIdx: number) => (
                                       <div key={recIdx} className="flex items-start gap-3">
                                         <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#6D709C] text-white flex items-center justify-center text-xs font-semibold">
@@ -2043,7 +2071,7 @@ export default function Home() {
                                         <div className="flex-1">
                                           <p className="font-medium text-gray-900 mb-1">{rec.action}</p>
                                           <p className="text-sm text-gray-600">
-                                            <strong>Timeframe:</strong> {rec.timeframe.replace(/_/g, ' ')} • <strong>Expected:</strong> {rec.expectedOutcome}
+                                            <strong>{t('analysis.timeframe')}:</strong> {rec.timeframe.replace(/_/g, ' ')} • <strong>{t('analysis.expected')}:</strong> {rec.expectedOutcome}
                                           </p>
                                         </div>
                                       </div>
@@ -2055,16 +2083,16 @@ export default function Home() {
                               {/* Resolution Probability */}
                               {pattern.resolutionProbability && (
                                 <div>
-                                  <h5 className="text-base font-semibold text-gray-900 mb-3">Probability of Resolution</h5>
+                                  <h5 className="text-base font-semibold text-gray-900 mb-3">{t('analysis.probabilityOfResolution')}</h5>
                                   <div className="space-y-2">
-                                    <p className="text-sm text-gray-700"><strong>Success Rate:</strong> {pattern.resolutionProbability.probability}</p>
+                                    <p className="text-sm text-gray-700"><strong>{t('analysis.successRate')}:</strong> {pattern.resolutionProbability.probability}</p>
                                     <div className="w-full bg-gray-200 rounded-full h-2">
                                       <div 
                                         className="bg-[#6D709C] h-2 rounded-full transition-all"
                                         style={{ width: pattern.resolutionProbability.probability }}
                                       ></div>
                                     </div>
-                                    <p className="text-sm text-gray-700 mt-3"><strong>If issue persists:</strong> {pattern.resolutionProbability.escalationPath}</p>
+                                    <p className="text-sm text-gray-700 mt-3"><strong>{t('analysis.ifIssuePersists')}:</strong> {pattern.resolutionProbability.escalationPath}</p>
                                   </div>
                                 </div>
                               )}
@@ -2080,7 +2108,7 @@ export default function Home() {
                 {!diagnosticResult.analysis?.technicalSummary && diagnosticResult.analysis?.repeatedPatterns && diagnosticResult.analysis.repeatedPatterns.length > 0 && (
                   <div className="mb-12">
                     <div className="mb-6 rounded-lg p-5" style={{ backgroundColor: 'rgba(251, 191, 36, 0.15)' }}>
-                      <h3 className="text-xl font-semibold text-gray-900">Repeated Patterns</h3>
+                      <h3 className="text-xl font-semibold text-gray-900">{t('analysis.repeatedPatterns')}</h3>
                     </div>
                     <div className="space-y-5">
                       {diagnosticResult.analysis.repeatedPatterns.map((pattern: any, idx: number) => (
@@ -2256,7 +2284,7 @@ export default function Home() {
                               {/* Related Faults */}
                               {comp.faults.length > 0 && (
                                 <div className="mb-4">
-                                  <h5 className="text-sm font-semibold text-gray-700 mb-2">Related Faults ({comp.faults.length})</h5>
+                                  <h5 className="text-sm font-semibold text-gray-700 mb-2">{t('results.relatedFaults')} ({comp.faults.length})</h5>
                                   <div className="space-y-2">
                                     {comp.faults.map((fault, fIdx) => (
                                       <div key={fIdx} className="text-sm text-gray-600 pl-4 border-l-2 border-orange-200">
@@ -2284,7 +2312,7 @@ export default function Home() {
                               {/* Related Breakdowns */}
                               {comp.breakdowns.length > 0 && (
                                 <div className="mb-4">
-                                  <h5 className="text-sm font-semibold text-gray-700 mb-2">Related Breakdowns ({comp.breakdowns.length})</h5>
+                                  <h5 className="text-sm font-semibold text-gray-700 mb-2">{t('results.relatedBreakdowns')} ({comp.breakdowns.length})</h5>
                                   <div className="space-y-2">
                                     {comp.breakdowns.map((bd, bIdx) => (
                                       <div key={bIdx} className="text-sm text-gray-600 pl-4 border-l-2 border-red-200">
@@ -2306,7 +2334,7 @@ export default function Home() {
                               {/* Parts Replaced */}
                               {comp.partsReplaced.length > 0 && (
                                 <div>
-                                  <h5 className="text-sm font-semibold text-gray-700 mb-2">Parts Replaced ({comp.partsReplaced.length})</h5>
+                                  <h5 className="text-sm font-semibold text-gray-700 mb-2">{t('results.partsReplacedOn')} ({comp.partsReplaced.length})</h5>
                                   <div className="overflow-x-auto">
                                     <table className="min-w-full divide-y divide-gray-200">
                                       <thead className="bg-gray-50">
@@ -2337,7 +2365,7 @@ export default function Home() {
                               )}
 
                               {comp.faults.length === 0 && comp.breakdowns.length === 0 && comp.partsReplaced.length === 0 && (
-                                <p className="text-sm text-gray-500">No related data for this component.</p>
+                                <p className="text-sm text-gray-500">{t('results.noRelatedData')}</p>
                               )}
                             </div>
                           ))}
@@ -2346,7 +2374,7 @@ export default function Home() {
                     }
                     return (
                       <div className="text-center py-8 text-gray-500">
-                        No component history available for this period.
+                        {t('results.noComponentHistory')}
                       </div>
                     )
                   })()}

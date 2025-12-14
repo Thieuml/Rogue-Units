@@ -62,8 +62,8 @@ function deduplicateLinkedPartsV2(parts: any[]) {
  * Get the V2 system prompt
  * Restructured into clear sections while preserving all V1 heuristics
  */
-function getSystemPromptV2(): string {
-  return `${ROLE_AND_GOAL}
+function getSystemPromptV2(language?: 'en' | 'fr'): string {
+  let basePrompt = `${ROLE_AND_GOAL}
 
 ${DATA_STRUCTURES}
 
@@ -74,6 +74,29 @@ ${PARTS_REPLACEMENT_LOGIC}
 ${ANALYSIS_GUIDELINES}
 
 ${OUTPUT_FORMAT}`
+
+  // Add French language instruction if needed
+  if (language === 'fr') {
+    const frenchInstruction = `IMPORTANT: Respond ENTIRELY in French. Use professional, technical French terminology appropriate for lift/elevator maintenance industry.
+
+Key terminology to use:
+- "panne" (breakdown), "technicien" (engineer/technician), "intervention" (visit/call),
+- "appareil/ascenseur" (unit/lift), "composant" (component/part), "défaillance" (failure),
+- "maintenance" (maintenance), "réparation" (repair), "remplacement" (replacement),
+- "diagnostic" (diagnostic), "analyse" (analysis), "recommandation" (recommendation).
+
+ALL fields in the JSON response must be in French, including:
+- All descriptions, narratives, and summaries
+- Component names (e.g., "porte" for door, "moteur" for motor, "contrôleur" for controller)
+- Pattern descriptions and root causes
+- Recommendations and action items
+- Timeline event descriptions
+
+`
+    basePrompt = frenchInstruction + '\n' + basePrompt
+  }
+
+  return basePrompt
 }
 
 /**
@@ -755,7 +778,7 @@ Generate your analysis following the instructions and output format specified in
 export async function generateDiagnosticAnalysisV2(
   data: DiagnosticData
 ): Promise<DiagnosticAnalysisV2> {
-  const systemPrompt = getSystemPromptV2()
+  const systemPrompt = getSystemPromptV2(data.language)
   const userMessage = buildUserMessageV2(data)
   
   console.log('[LLM V2] Generating diagnostic analysis...')

@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { usePathname } from 'next/navigation'
 import { WeMaintainLogo } from '@/components/WeMaintainLogo'
 import { UserMenu } from '@/components/UserMenu'
+import { Language } from '@/lib/translations'
 
 interface UserStat {
   userId: string
@@ -70,12 +71,20 @@ export default function UsageAnalyticsPage() {
   // Initialize country from localStorage or default to FR
   const [country, setCountryState] = useState<string>('FR')
   
+  // Language state
+  const [language, setLanguageState] = useState<Language>('en')
+  
   // Load saved country from localStorage after mount to avoid hydration mismatch
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('diagnostic-country')
       if (saved && saved !== country) {
         setCountryState(saved)
+      }
+      // Load language preference
+      const savedLanguage = localStorage.getItem('diagnostic-language') as Language
+      if (savedLanguage === 'en' || savedLanguage === 'fr') {
+        setLanguageState(savedLanguage)
       }
     }
   }, [])
@@ -85,6 +94,14 @@ export default function UsageAnalyticsPage() {
     setCountryState(newCountry)
     if (typeof window !== 'undefined') {
       localStorage.setItem('diagnostic-country', newCountry)
+    }
+  }
+  
+  // Wrapper to persist language changes
+  const setLanguage = (newLanguage: Language) => {
+    setLanguageState(newLanguage)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('diagnostic-language', newLanguage)
     }
   }
   
@@ -255,7 +272,9 @@ export default function UsageAnalyticsPage() {
           )}
         </nav>
         {/* User Menu at Bottom */}
-        <UserMenu />
+        <div className="mt-auto">
+          <UserMenu language={language} onLanguageChange={setLanguage} />
+        </div>
       </aside>
 
       {/* Main Content */}

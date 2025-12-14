@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react'
 import { usePathname } from 'next/navigation'
 import { WeMaintainLogo } from '@/components/WeMaintainLogo'
 import { UserMenu } from '@/components/UserMenu'
+import { Language } from '@/lib/translations'
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
@@ -31,6 +32,28 @@ export default function PromptTesting() {
   const { data: session } = useSession()
   const pathname = usePathname()
   const [country, setCountry] = useState<string>('FR')
+  
+  // Language state
+  const [language, setLanguageState] = useState<Language>('en')
+  
+  // Load language preference
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedLanguage = localStorage.getItem('diagnostic-language') as Language
+      if (savedLanguage === 'en' || savedLanguage === 'fr') {
+        setLanguageState(savedLanguage)
+      }
+    }
+  }, [])
+  
+  // Wrapper to persist language changes
+  const setLanguage = (newLanguage: Language) => {
+    setLanguageState(newLanguage)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('diagnostic-language', newLanguage)
+    }
+  }
+  
   const [selectedBuildingId, setSelectedBuildingId] = useState<string>('')
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
   const [buildingSearch, setBuildingSearch] = useState<string>('')
@@ -214,7 +237,7 @@ export default function PromptTesting() {
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar - Same as main page */}
-      <aside className="w-64 bg-slate-800 text-white flex flex-col">
+      <aside className="w-64 bg-slate-800 text-white flex flex-col h-screen flex-shrink-0">
         <div className="p-6 border-b border-slate-700">
           <WeMaintainLogo />
         </div>
@@ -336,7 +359,9 @@ export default function PromptTesting() {
             </div>
           )}
         </nav>
-        <UserMenu />
+        <div className="mt-auto">
+          <UserMenu language={language} onLanguageChange={setLanguage} />
+        </div>
       </aside>
 
       {/* Main Content */}
