@@ -619,18 +619,28 @@ export default function Home() {
       }
       
       const result = await response.json()
-      setDiagnosticResult({
+      const newDiagnostic = {
+        id: result.id, // Include the diagnostic ID from response
         unitId: selectedDeviceId,
         unitName: selectedDevice.name,
         buildingId: selectedBuildingId,
         buildingName: selectedBuilding.name,
+        country: country,
+        userId: session?.user?.email || null,
+        userName: session?.user?.name || null,
         visitReports: result.visitReports || [],
         breakdowns: result.breakdowns || [],
         maintenanceIssues: result.maintenanceIssues || [],
         repairRequests: result.repairRequests || [],
         analysis: result.analysis,
         generatedAt: new Date(),
-      })
+      }
+      setDiagnosticResult(newDiagnostic)
+      
+      // Update URL with diagnostic ID for sharing/bookmarking
+      if (result.id) {
+        window.history.pushState({}, '', `/?diagnosticId=${result.id}`)
+      }
       
       // Set active tab to Analysis when diagnostic completes
       setActiveTab('analysis')

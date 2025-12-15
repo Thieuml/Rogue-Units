@@ -651,8 +651,10 @@ Generate the analysis in the following JSON format:
  * Build the user message with data summaries
  */
 function buildUserMessage(data: DiagnosticData): string {
+  const isFrench = data.language === 'fr'
+  
   const contextNote = data.context
-    ? `\n\nAdditional Context from User: ${data.context}`
+    ? `\n\n${isFrench ? 'Contexte additionnel de l\'utilisateur' : 'Additional Context from User'}: ${data.context}`
     : ''
   
   // Format visit reports for better analysis
@@ -673,20 +675,60 @@ function buildUserMessage(data: DiagnosticData): string {
     }
   })
   
-  return `Analyze the following data for the lift ${data.unitName} in Building ${data.buildingName}.
+  // Use appropriate language for the intro text
+  const introText = isFrench
+    ? `Analysez les données suivantes pour l'ascenseur ${data.unitName} dans le bâtiment ${data.buildingName}.
 
-**IMPORTANT:** When writing the executive summary, refer to the unit as "the lift ${data.unitName}" or "${data.unitName}" - do NOT use "at Unit" or "at" before the unit name. For example, write "The lift duplex gauche in Building..." NOT "The lift at Unit duplex gauche in Building...".
+**IMPORTANT :** Dans le résumé exécutif, référez-vous à l'appareil comme "l'ascenseur ${data.unitName}" ou "${data.unitName}" - N'utilisez PAS "à l'appareil" ou "à" avant le nom de l'appareil. Par exemple, écrivez "L'ascenseur duplex gauche dans le bâtiment..." et PAS "L'ascenseur à l'appareil duplex gauche dans le bâtiment...".`
+    : `Analyze the following data for the lift ${data.unitName} in Building ${data.buildingName}.
+
+**IMPORTANT:** When writing the executive summary, refer to the unit as "the lift ${data.unitName}" or "${data.unitName}" - do NOT use "at Unit" or "at" before the unit name. For example, write "The lift duplex gauche in Building..." NOT "The lift at Unit duplex gauche in Building...".`
+  
+  // Section labels in appropriate language
+  const labels = isFrench ? {
+    visitReports: 'Rapports de visite / Tâches complétées',
+    breakdowns: 'Pannes / Arrêts',
+    maintenanceIssues: 'Anomalies de maintenance',
+    repairRequests: 'Demandes de pièces / Réparations',
+    noBreakdowns: 'Aucune panne enregistrée pour cette période',
+    noMaintenanceIssues: 'Aucune anomalie de maintenance enregistrée pour cette période',
+    noRepairRequests: 'Aucune demande de réparation enregistrée pour cette période',
+    callbackFrequency: 'Fréquence des rappels',
+    callbacksInPeriod: 'rappels dans la période',
+    timeSinceMaintenance: 'Temps depuis la dernière maintenance',
+    days: 'jours',
+    note: 'Note',
+    noteText: 'Les rapports de visite, pannes, anomalies de maintenance et demandes de réparation sont disponibles pour l\'analyse. Les alertes IoT ne sont pas actuellement connectées.',
+    generateInstruction: 'Générez votre analyse en suivant les instructions et le format de sortie spécifiés dans le prompt système.'
+  } : {
+    visitReports: 'Visit Reports / Completed Tasks',
+    breakdowns: 'Breakdowns / Downtimes',
+    maintenanceIssues: 'Maintenance Issues / Anomalies',
+    repairRequests: 'Repair Requests / Parts Requests',
+    noBreakdowns: 'No breakdowns recorded in this period',
+    noMaintenanceIssues: 'No maintenance issues recorded in this period',
+    noRepairRequests: 'No repair requests recorded in this period',
+    callbackFrequency: 'Callback Frequency',
+    callbacksInPeriod: 'callbacks in the period',
+    timeSinceMaintenance: 'Time Since Last Maintenance',
+    days: 'days',
+    note: 'Note',
+    noteText: 'Visit reports, breakdowns, maintenance issues, and repair requests are available for analysis. IoT alerts are not currently connected.',
+    generateInstruction: 'Generate your analysis following the instructions and output format specified in the system prompt.'
+  }
+  
+  return `${introText}
 
 ${contextNote}
 
-**Visit Reports / Completed Tasks (${data.visitReports.length}):**
+**${labels.visitReports} (${data.visitReports.length}):**
 ${JSON.stringify(visitReportsFormatted, null, 2)}
 
-**Breakdowns / Downtimes (${data.breakdowns.length}):**
+**${labels.breakdowns} (${data.breakdowns.length}):**
 ${data.breakdowns.length > 0 ? JSON.stringify(data.breakdowns.map((bd: any) => ({
   breakdownId: bd.breakdownId,
   startTime: bd.startTime,
-  endTime: bd.endTime || 'ONGOING',
+  endTime: bd.endTime || (isFrench ? 'EN COURS' : 'ONGOING'),
   durationMinutes: bd.minutesDuration,
   origin: bd.origin,
   failureLocations: bd.failureLocations,
@@ -694,9 +736,9 @@ ${data.breakdowns.length > 0 ? JSON.stringify(data.breakdowns.map((bd: any) => (
   visitedDuringBreakdown: bd.visitedDuringBreakdown,
   publicComment: bd.publicComment,
   internalComment: bd.internalComment,
-})), null, 2) : 'No breakdowns recorded in this period'}
+})), null, 2) : labels.noBreakdowns}
 
-**Maintenance Issues / Anomalies (${data.maintenanceIssues.length}):**
+**${labels.maintenanceIssues} (${data.maintenanceIssues.length}):**
 ${data.maintenanceIssues.length > 0 ? JSON.stringify(data.maintenanceIssues.map((issue: any) => ({
   completedDate: issue.completedDate,
   taskType: issue.type,
@@ -705,9 +747,9 @@ ${data.maintenanceIssues.length > 0 ? JSON.stringify(data.maintenanceIssues.map(
   question: issue.question,
   answer: issue.answer,
   resolved: issue.followUp,
-})), null, 2) : 'No maintenance issues recorded in this period'}
+})), null, 2) : labels.noMaintenanceIssues}
 
-**Repair Requests / Parts Requests (${data.repairRequests.length}):**
+**${labels.repairRequests} (${data.repairRequests.length}):**
 ${data.repairRequests.length > 0 ? JSON.stringify(data.repairRequests.map((rr: any) => ({
   repairRequestNumber: rr.repairRequestNumber,
   requestedDate: rr.requestedDate,
@@ -721,14 +763,14 @@ ${data.repairRequests.length > 0 ? JSON.stringify(data.repairRequests.map((rr: a
   partName: rr.partName,
   partFamily: rr.partFamily,
   partSubFamily: rr.partSubFamily,
-})), null, 2) : 'No repair requests recorded in this period'}
+})), null, 2) : labels.noRepairRequests}
 
-${data.callbackFrequency !== undefined ? `\nCallback Frequency: ${data.callbackFrequency} callbacks in the period` : ''}
-${data.timeSinceLastMaintenance !== undefined ? `\nTime Since Last Maintenance: ${data.timeSinceLastMaintenance} days` : ''}
+${data.callbackFrequency !== undefined ? `\n${labels.callbackFrequency}: ${data.callbackFrequency} ${labels.callbacksInPeriod}` : ''}
+${data.timeSinceLastMaintenance !== undefined ? `\n${labels.timeSinceMaintenance}: ${data.timeSinceLastMaintenance} ${labels.days}` : ''}
 
-**Note:** Visit reports, breakdowns, maintenance issues, and repair requests are available for analysis. IoT alerts are not currently connected.
+**${labels.note}:** ${labels.noteText}
 
-Generate your analysis following the instructions and output format specified in the system prompt.`
+${labels.generateInstruction}`
 }
 
 /**

@@ -187,8 +187,9 @@ export async function POST(request: NextRequest) {
     
     // Store diagnostic result for recent diagnostics
     // Store the original analysis (v1 or v2) in database
+    let diagnosticId: string | undefined
     try {
-      await storeDiagnostic({
+      diagnosticId = await storeDiagnostic({
         unitId,
         unitName,
         buildingName,
@@ -202,13 +203,14 @@ export async function POST(request: NextRequest) {
         repairRequests,
         analysis, // Store original format (v1 or v2)
       })
-      console.log(`[API] Stored diagnostic for ${unitName} by ${userName || 'unknown user'} (version: ${version})`)
+      console.log(`[API] Stored diagnostic for ${unitName} by ${userName || 'unknown user'} with ID: ${diagnosticId} (version: ${version})`)
     } catch (error) {
       console.error('[API] Error storing diagnostic:', error)
       // Don't fail the request if storage fails
     }
     
     return NextResponse.json({
+      id: diagnosticId, // Include the diagnostic ID in response
       visitReports,
       breakdowns,
       maintenanceIssues,
