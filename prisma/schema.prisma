@@ -28,6 +28,9 @@ model Diagnostic {
   repairRequests  Json?
   analysis        Json?
   
+  // Relations
+  feedback        Feedback[]
+  
   // Indexes for faster queries
   @@index([unitId])
   @@index([generatedAt])
@@ -36,4 +39,32 @@ model Diagnostic {
   @@index([country])
   @@index([userId])
   @@map("diagnostics")
+}
+
+model Feedback {
+  id              String   @id @default(cuid())
+  diagnosticId    String
+  diagnostic      Diagnostic @relation(fields: [diagnosticId], references: [id], onDelete: Cascade)
+  
+  // User who provided feedback
+  userId          String
+  userName        String
+  
+  // What section was rated
+  section         String   // e.g., "executiveSummary", "technicalAnalysis", "timeline", etc.
+  sectionLabel    String   // Human-readable label for display
+  
+  // Feedback content
+  sentiment       String   // "positive" or "negative" (thumbs up/down)
+  category        String?  // e.g., "inaccurate", "missing_info", "too_technical", "excellent", "clear"
+  comment         String?  // Optional detailed comment
+  
+  createdAt       DateTime @default(now())
+  
+  // Indexes for faster queries
+  @@index([diagnosticId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([sentiment])
+  @@map("feedback")
 }

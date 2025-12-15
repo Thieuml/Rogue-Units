@@ -8,6 +8,7 @@ import { UserMenu } from '@/components/UserMenu'
 import LanguageToggle from '@/components/LanguageToggle'
 import { translateStateKey, translateProblemKey } from '@/lib/state-key-translator'
 import { useTranslation, Language } from '@/lib/translations'
+import { FeedbackButton } from '@/components/FeedbackButton'
 
 const fetcher = async (url: string) => {
   console.log('[Debug] Fetching URL:', url)
@@ -223,8 +224,13 @@ export default function Home() {
   const [showCountryDropdown, setShowCountryDropdown] = useState(false)
   const [showRecentResults, setShowRecentResults] = useState(false)
   const [recentResults, setRecentResults] = useState<DiagnosticResult[]>([])
+  const [isLoadingRecent, setIsLoadingRecent] = useState(false)
+  // Initialize loading state to false, will be set in useEffect
+  const [isLoadingDiagnosticFromUrl, setIsLoadingDiagnosticFromUrl] = useState(false)
   const [activeTab, setActiveTab] = useState<'summary' | 'visits' | 'analysis' | 'components'>('summary')
   const [copiedSection, setCopiedSection] = useState<string | null>(null)
+  const [userFeedback, setUserFeedback] = useState<Record<string, any>>({})
+
   
   // Check for view=recent query parameter on mount
   useEffect(() => {
@@ -236,8 +242,38 @@ export default function Home() {
         // Clean up URL
         window.history.replaceState({}, '', '/')
       }
+      
+      // Load diagnostic from URL parameter
+      const diagnosticId = params.get('diagnosticId')
+      if (diagnosticId) {
+        setIsLoadingDiagnosticFromUrl(true)
+        loadDiagnosticById(diagnosticId)
+        // Don't clean up URL immediately - wait for load to complete
+      }
     }
   }, [])
+  
+  // Function to load a diagnostic by ID
+  const loadDiagnosticById = async (diagnosticId: string) => {
+    try {
+      const response = await fetch(`/api/diagnostics/${diagnosticId}`)
+      if (response.ok) {
+        const diagnostic = await response.json()
+        setDiagnosticResult(diagnostic)
+        setShowRecentResults(false)
+        setActiveTab('analysis')
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+        // Clean up URL after successful load
+        window.history.replaceState({}, '', '/')
+      } else {
+        console.error('Failed to load diagnostic:', response.statusText)
+      }
+    } catch (error) {
+      console.error('Error loading diagnostic:', error)
+    } finally {
+      setIsLoadingDiagnosticFromUrl(false)
+    }
+  }
   
   // Optimistic admin check - remember if user was admin to prevent flickering
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
@@ -331,6 +367,7 @@ export default function Home() {
   // Load recent results from API with filters
   // Use useCallback to ensure it uses the latest country value
   const loadRecentDiagnostics = useCallback(() => {
+    setIsLoadingRecent(true)
     const params = new URLSearchParams()
     params.append('country', country)
     
@@ -373,6 +410,9 @@ export default function Home() {
         .catch(err => {
         console.error('[UI] Error loading recent results:', err)
         setRecentResults([])
+      })
+      .finally(() => {
+        setIsLoadingRecent(false)
       })
   }, [country, showMyDiagnostics, dateFilterStart, dateFilterEnd, unitFilter])
   
@@ -651,6 +691,39 @@ export default function Home() {
     }
   }
   
+  // Load user feedback for the current diagnostic
+  const loadUserFeedback = useCallback(async (diagnosticId: string) => {
+    if (!session?.user?.email) return
+    
+    try {
+      const response = await fetch(`/api/feedback?diagnosticId=${diagnosticId}&userId=${encodeURIComponent(session.user.email)}`)
+      if (response.ok) {
+        const feedback = await response.json()
+        const feedbackMap: Record<string, any> = {}
+        feedback.forEach((item: any) => {
+          feedbackMap[item.section] = item
+        })
+        setUserFeedback(feedbackMap)
+      }
+    } catch (error) {
+      console.error('Error loading feedback:', error)
+    }
+  }, [session])
+
+  // Reload feedback after submission
+  const handleFeedbackSubmitted = useCallback(() => {
+    if (diagnosticResult?.id) {
+      loadUserFeedback(diagnosticResult.id)
+    }
+  }, [diagnosticResult?.id, loadUserFeedback])
+
+  // Load feedback when diagnostic changes
+  useEffect(() => {
+    if (diagnosticResult?.id) {
+      loadUserFeedback(diagnosticResult.id)
+    }
+  }, [diagnosticResult?.id, loadUserFeedback])
+  
   const handleCopyOperationalSummary = async () => {
     if (!diagnosticResult?.analysis?.executiveSummary) return
     
@@ -749,7 +822,7 @@ export default function Home() {
               </div>
             </div>
             
-            <div className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="text-sm font-semibold text-slate-400 uppercase tracking-wider mt-9">
               {t('nav.navigation')}
             </div>
             <a
@@ -813,7 +886,7 @@ export default function Home() {
           
           {/* Admin Tools Section - Only visible to admin users */}
           {isAdmin && (
-            <div className="pb-4 mt-4">
+            <div className="pb-4 mt-6">
               <div className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">{t('nav.adminTools')}</div>
               <div className="space-y-2">
                 <a
@@ -837,13 +910,23 @@ export default function Home() {
                   </svg>
                   <span>{t('nav.usageAnalytics')}</span>
                 </a>
+
+                <a
+                  href="/feedback"
+                  className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-white font-medium hover:bg-slate-700 transition-colors"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+                    <path d="M21 11.5C21 16.7 16.97 21 12 21C10.66 21 9.39 20.71 8.25 20.19L3 21.5L4.82 16.83C3.67 15.5 3 13.79 3 12C3 7.03 7.03 3 12 3C16.97 3 21 7.03 21 11.5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <span>Feedback</span>
+                </a>
               </div>
             </div>
           )}
         </nav>
         {/* User Menu at Bottom with Language Toggle */}
         <div className="mt-auto">
-          <UserMenu language={language} onLanguageChange={setLanguage} />
+          <UserMenu />
         </div>
       </aside>
 
@@ -927,7 +1010,17 @@ export default function Home() {
               <div className="mb-4 text-sm text-gray-600">
                 {recentResults.length} {t('recent.foundDiagnostics')}{language === 'en' ? ` for ${COUNTRIES.find(c => c.code === country)?.name}` : ''}
               </div>
-              {recentResults.length === 0 ? (
+              {isLoadingRecent ? (
+                <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 text-center text-gray-500">
+                  <div className="flex items-center justify-center gap-3">
+                    <svg className="animate-spin h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p>Loading diagnostics...</p>
+                  </div>
+                </div>
+              ) : recentResults.length === 0 ? (
                 <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 text-center text-gray-500">
                   <p className="mb-2">{t('recent.noDiagnosticsYet')}</p>
                   <p className="text-xs text-gray-400">
@@ -1058,8 +1151,21 @@ export default function Home() {
             </div>
           )}
           
+          {/* Loading Diagnostic from URL */}
+          {isLoadingDiagnosticFromUrl && (
+            <div className="flex items-center justify-center min-h-[400px]">
+              <div className="text-center">
+                <svg className="animate-spin h-8 w-8 text-gray-500 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p className="text-gray-600">Loading diagnostic...</p>
+              </div>
+            </div>
+          )}
+          
           {/* Diagnostic Form - Only show when not viewing recent results and no diagnostic result */}
-          {!showRecentResults && !diagnosticResult && (
+          {!showRecentResults && !diagnosticResult && !isLoadingDiagnosticFromUrl && (
             <>
               <h1 className="text-3xl font-bold mb-8 text-gray-900">{t('page.liftDiagnosticSummary')}</h1>
       
@@ -1888,7 +1994,18 @@ export default function Home() {
                 {diagnosticResult.analysis?.finalExecSummary && (
                   <div className="mb-8 rounded-lg overflow-hidden border border-gray-200" style={{ background: 'linear-gradient(to bottom, rgba(216, 216, 239, 0.25) 0%, rgba(255, 255, 255, 0.1) 100%)' }}>
                     <div className="p-6">
-                      <h3 className="text-xl font-semibold text-gray-900 mb-3">{t('analysis.executiveSummary')}</h3>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-xl font-semibold text-gray-900">{t('analysis.executiveSummary')}</h3>
+                        {diagnosticResult.id && (
+                          <FeedbackButton
+                            diagnosticId={diagnosticResult.id}
+                            section="finalExecSummary"
+                            sectionLabel={t('analysis.executiveSummary')}
+                            existingFeedback={userFeedback['finalExecSummary']}
+                            onFeedbackSubmitted={handleFeedbackSubmitted}
+                          />
+                        )}
+                      </div>
                       <p className="text-gray-700 leading-relaxed text-sm">
                         {diagnosticResult.analysis.finalExecSummary.replace(/at Unit /gi, '').replace(/at /gi, '')}
                       </p>
@@ -1901,28 +2018,39 @@ export default function Home() {
                   <div className="mb-12">
                     {/* Section Header */}
                     <div className="mb-6 rounded-lg p-5 flex items-center justify-between" style={{ backgroundColor: 'rgba(115, 161, 255, 0.15)' }}>
-                      <h3 className="text-xl font-semibold text-gray-900">{t('analysis.operationalSummary')}</h3>
-                      <button
-                        onClick={handleCopyOperationalSummary}
-                        className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:text-gray-900 hover:bg-white/50 rounded transition-colors"
-                        title={t('actions.copy')}
-                      >
-                        {copiedSection === 'operational' ? (
-                          <>
-                            <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                            <span className="text-green-600">{t('actions.copied')}</span>
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                            <span>{t('actions.copy')}</span>
-                          </>
-                        )}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-xl font-semibold text-gray-900">{t('analysis.operationalSummary')}</h3>
+                        <button
+                          onClick={handleCopyOperationalSummary}
+                          className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:text-gray-900 hover:bg-white/50 rounded transition-colors"
+                          title={t('actions.copy')}
+                        >
+                          {copiedSection === 'operational' ? (
+                            <>
+                              <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              <span className="text-green-600">{t('actions.copied')}</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                              <span>{t('actions.copy')}</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      {diagnosticResult.id && (
+                        <FeedbackButton
+                          diagnosticId={diagnosticResult.id}
+                          section="operationalSummary"
+                          sectionLabel={t('analysis.operationalSummary')}
+                          existingFeedback={userFeedback['operationalSummary']}
+                          onFeedbackSubmitted={handleFeedbackSubmitted}
+                        />
+                      )}
                     </div>
                     
                     {typeof diagnosticResult.analysis.executiveSummary === 'object' ? (
@@ -1994,8 +2122,17 @@ export default function Home() {
                 {diagnosticResult.analysis?.technicalSummary && (
                   <div className="mb-12">
                     {/* Section Header */}
-                    <div className="mb-6 rounded-lg p-5" style={{ backgroundColor: 'rgba(109, 112, 156, 0.15)' }}>
+                    <div className="mb-6 rounded-lg p-5 flex items-center justify-between" style={{ backgroundColor: 'rgba(109, 112, 156, 0.15)' }}>
                       <h3 className="text-xl font-semibold text-gray-900">{t('analysis.technicalSummary')}</h3>
+                      {diagnosticResult.id && (
+                        <FeedbackButton
+                          diagnosticId={diagnosticResult.id}
+                          section="technicalSummary"
+                          sectionLabel={t('analysis.technicalSummary')}
+                          existingFeedback={userFeedback['technicalSummary']}
+                          onFeedbackSubmitted={handleFeedbackSubmitted}
+                        />
+                      )}
                     </div>
                     
                     {/* Overview */}
@@ -2107,8 +2244,17 @@ export default function Home() {
                 {/* Fallback: Show Repeated Patterns if Technical Summary not available */}
                 {!diagnosticResult.analysis?.technicalSummary && diagnosticResult.analysis?.repeatedPatterns && diagnosticResult.analysis.repeatedPatterns.length > 0 && (
                   <div className="mb-12">
-                    <div className="mb-6 rounded-lg p-5" style={{ backgroundColor: 'rgba(251, 191, 36, 0.15)' }}>
+                    <div className="mb-6 rounded-lg p-5 flex items-center justify-between" style={{ backgroundColor: 'rgba(251, 191, 36, 0.15)' }}>
                       <h3 className="text-xl font-semibold text-gray-900">{t('analysis.repeatedPatterns')}</h3>
+                      {diagnosticResult.id && (
+                        <FeedbackButton
+                          diagnosticId={diagnosticResult.id}
+                          section="repeatedPatterns"
+                          sectionLabel={t('analysis.repeatedPatterns')}
+                          existingFeedback={userFeedback['repeatedPatterns']}
+                          onFeedbackSubmitted={handleFeedbackSubmitted}
+                        />
+                      )}
                     </div>
                     <div className="space-y-5">
                       {diagnosticResult.analysis.repeatedPatterns.map((pattern: any, idx: number) => (
