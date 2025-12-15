@@ -341,7 +341,7 @@ export const translations = {
     
     // Page titles
     page: {
-      liftDiagnosticSummary: 'Lancer un diagnostic opérationnel et technique d\'ascenseur',
+      liftDiagnosticSummary: 'Diagnostic opérationnel et technique d\'ascenseur',
     },
     
     // Usage Analytics
