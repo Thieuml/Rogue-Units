@@ -255,10 +255,12 @@ export default function Home() {
   
   // Function to load a diagnostic by ID
   const loadDiagnosticById = async (diagnosticId: string) => {
+    console.log('[Diagnostic] Loading diagnostic by ID:', diagnosticId)
     try {
       const response = await fetch(`/api/diagnostics/${diagnosticId}`)
       if (response.ok) {
         const diagnostic = await response.json()
+        console.log('[Diagnostic] Loaded diagnostic:', diagnostic.id, diagnostic.unitName)
         setDiagnosticResult(diagnostic)
         setShowRecentResults(false)
         setActiveTab('analysis')
@@ -695,14 +697,18 @@ export default function Home() {
   const loadUserFeedback = useCallback(async (diagnosticId: string) => {
     if (!session?.user?.email) return
     
+    console.log('[Feedback] Loading feedback for diagnostic:', diagnosticId, 'user:', session.user.email)
+    
     try {
       const response = await fetch(`/api/feedback?diagnosticId=${diagnosticId}&userId=${encodeURIComponent(session.user.email)}`)
       if (response.ok) {
         const feedback = await response.json()
+        console.log('[Feedback] Loaded feedback:', feedback)
         const feedbackMap: Record<string, any> = {}
         feedback.forEach((item: any) => {
           feedbackMap[item.section] = item
         })
+        console.log('[Feedback] Feedback map:', feedbackMap)
         setUserFeedback(feedbackMap)
       }
     } catch (error) {
@@ -719,8 +725,16 @@ export default function Home() {
 
   // Load feedback when diagnostic changes
   useEffect(() => {
+    console.log('[Feedback] Diagnostic changed, ID:', diagnosticResult?.id)
     if (diagnosticResult?.id) {
+      // Clear previous feedback first
+      console.log('[Feedback] Clearing previous feedback')
+      setUserFeedback({})
       loadUserFeedback(diagnosticResult.id)
+    } else {
+      // Clear feedback when no diagnostic is shown
+      console.log('[Feedback] No diagnostic, clearing feedback')
+      setUserFeedback({})
     }
   }, [diagnosticResult?.id, loadUserFeedback])
   
@@ -1044,11 +1058,16 @@ export default function Home() {
                         key={result.unitId || idx}
                         className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer relative"
                         onClick={() => {
-                          console.log('[UI] Clicked on recent diagnostic:', result.unitName)
+                          console.log('[UI] Clicked on recent diagnostic:', result.unitName, 'ID:', result.id)
                           setDiagnosticResult(result)
                           setShowRecentResults(false)
                           setActiveTab('analysis') // Land on Analysis tab when opening existing diagnostic
                           window.scrollTo({ top: 0, behavior: 'smooth' })
+                          // Update URL with diagnostic ID for sharing and state management
+                          if (result.id) {
+                            console.log('[UI] Updating URL with diagnostic ID:', result.id)
+                            window.history.pushState({}, '', `/?diagnosticId=${result.id}`)
+                          }
                         }}
                       >
                         <div className="flex justify-between items-start">

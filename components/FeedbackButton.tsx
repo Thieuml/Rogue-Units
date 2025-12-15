@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FeedbackModal } from './FeedbackModal'
 import { Language } from '@/lib/translations'
 
@@ -29,6 +29,12 @@ export function FeedbackButton({
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedSentiment, setSelectedSentiment] = useState<'positive' | 'negative' | null>(null)
   const [currentFeedback, setCurrentFeedback] = useState(existingFeedback)
+
+  // Update currentFeedback when existingFeedback prop changes (when diagnostic changes)
+  useEffect(() => {
+    console.log('[FeedbackButton] Existing feedback changed for section:', section, existingFeedback)
+    setCurrentFeedback(existingFeedback)
+  }, [existingFeedback, section])
 
   const handleThumbClick = (sentiment: 'positive' | 'negative') => {
     setSelectedSentiment(sentiment)
