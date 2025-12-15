@@ -881,8 +881,8 @@ export default function Home() {
                 setShowCountryDropdown(false)
                 setShowRecentResults(true)
                 setDiagnosticResult(null)
-                // Clear URL - remove diagnostic ID
-                window.history.pushState({}, '', '/')
+                // Update URL to show recent diagnostics view
+                window.history.pushState({}, '', '/?view=recent')
                 // Scroll to top to show recent results
                 window.scrollTo({ top: 0, behavior: 'smooth' })
               }}
@@ -1418,8 +1418,8 @@ export default function Home() {
                   onClick={() => {
                     setDiagnosticResult(null)
                     setShowRecentResults(true)
-                    // Clear URL - remove diagnostic ID
-                    window.history.pushState({}, '', '/')
+                    // Update URL to show recent diagnostics view
+                    window.history.pushState({}, '', '/?view=recent')
                     window.scrollTo({ top: 0, behavior: 'smooth' })
                   }}
                   className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
