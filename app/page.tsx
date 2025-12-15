@@ -263,8 +263,8 @@ export default function Home() {
         setShowRecentResults(false)
         setActiveTab('analysis')
         window.scrollTo({ top: 0, behavior: 'smooth' })
-        // Clean up URL after successful load
-        window.history.replaceState({}, '', '/')
+        // Keep the diagnostic ID in the URL for sharing and bookmarking
+        // Don't clean it up
       } else {
         console.error('Failed to load diagnostic:', response.statusText)
       }
@@ -2003,6 +2003,7 @@ export default function Home() {
                             sectionLabel={t('analysis.executiveSummary')}
                             existingFeedback={userFeedback['finalExecSummary']}
                             onFeedbackSubmitted={handleFeedbackSubmitted}
+                            language={language}
                           />
                         )}
                       </div>
@@ -2049,6 +2050,7 @@ export default function Home() {
                           sectionLabel={t('analysis.operationalSummary')}
                           existingFeedback={userFeedback['operationalSummary']}
                           onFeedbackSubmitted={handleFeedbackSubmitted}
+                          language={language}
                         />
                       )}
                     </div>
@@ -2131,6 +2133,7 @@ export default function Home() {
                           sectionLabel={t('analysis.technicalSummary')}
                           existingFeedback={userFeedback['technicalSummary']}
                           onFeedbackSubmitted={handleFeedbackSubmitted}
+                          language={language}
                         />
                       )}
                     </div>
@@ -2253,6 +2256,7 @@ export default function Home() {
                           sectionLabel={t('analysis.repeatedPatterns')}
                           existingFeedback={userFeedback['repeatedPatterns']}
                           onFeedbackSubmitted={handleFeedbackSubmitted}
+                          language={language}
                         />
                       )}
                     </div>

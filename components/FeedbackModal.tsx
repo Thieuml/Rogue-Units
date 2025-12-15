@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslation, Language } from '@/lib/translations'
 
 interface FeedbackModalProps {
   isOpen: boolean
@@ -16,25 +17,8 @@ interface FeedbackModalProps {
     comment?: string
   } | null
   onFeedbackSubmitted: (feedback: any) => void
+  language?: Language
 }
-
-const NEGATIVE_CATEGORIES = [
-  { value: 'inaccurate', label: 'Contains inaccuracies' },
-  { value: 'too_confident', label: 'Too confident / not cautious enough' },
-  { value: 'misses_patterns', label: 'Misses important patterns' },
-  { value: 'too_long', label: 'Too long or hard to scan' },
-  { value: 'too_vague', label: 'Too vague' },
-  { value: 'not_realistic', label: 'Recommendations not realistic' },
-  { value: 'avoids_handling', label: 'Avoids addressing handling issues' },
-]
-
-const POSITIVE_CATEGORIES = [
-  { value: 'accurate', label: 'Accurate and trustworthy' },
-  { value: 'clear_summary', label: 'Clear summary' },
-  { value: 'right_detail', label: 'Right level of detail' },
-  { value: 'actionable', label: 'Actionable next steps' },
-  { value: 'useful_ops', label: 'Useful for OPS decisions' },
-]
 
 export function FeedbackModal({
   isOpen,
@@ -44,13 +28,33 @@ export function FeedbackModal({
   sectionLabel,
   initialSentiment,
   existingFeedback,
-  onFeedbackSubmitted
+  onFeedbackSubmitted,
+  language = 'en'
 }: FeedbackModalProps) {
+  const { t } = useTranslation(language)
   const [sentiment] = useState(initialSentiment)
   const [category, setCategory] = useState(existingFeedback?.category || '')
   const [comment, setComment] = useState(existingFeedback?.comment || '')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const NEGATIVE_CATEGORIES = [
+    { value: 'inaccurate', label: t('feedback.inaccurate') },
+    { value: 'too_confident', label: t('feedback.tooConfident') },
+    { value: 'misses_patterns', label: t('feedback.missesPatterns') },
+    { value: 'too_long', label: t('feedback.tooLong') },
+    { value: 'too_vague', label: t('feedback.tooVague') },
+    { value: 'not_realistic', label: t('feedback.notRealistic') },
+    { value: 'avoids_handling', label: t('feedback.avoidsHandling') },
+  ]
+
+  const POSITIVE_CATEGORIES = [
+    { value: 'accurate', label: t('feedback.accurate') },
+    { value: 'clear_summary', label: t('feedback.clearSummary') },
+    { value: 'right_detail', label: t('feedback.rightDetail') },
+    { value: 'actionable', label: t('feedback.actionable') },
+    { value: 'useful_ops', label: t('feedback.usefulOps') },
+  ]
 
   const categories = sentiment === 'positive' ? POSITIVE_CATEGORIES : NEGATIVE_CATEGORIES
 
@@ -67,6 +71,13 @@ export function FeedbackModal({
     e.preventDefault()
     setIsSubmitting(true)
     setError(null)
+
+    // Validate category is selected
+    if (!category) {
+      setError(t('feedback.selectCategoryError'))
+      setIsSubmitting(false)
+      return
+    }
 
     try {
       const response = await fetch('/api/feedback', {
@@ -108,7 +119,7 @@ export function FeedbackModal({
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">Provide Feedback</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t('feedback.provideFeedback')}</h2>
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -127,7 +138,7 @@ export function FeedbackModal({
           {/* Section Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Section
+              {t('feedback.section')}
             </label>
             <div className="px-3 py-2 bg-gray-50 rounded-md text-sm text-gray-900 border border-gray-200">
               {sectionLabel}
@@ -137,7 +148,7 @@ export function FeedbackModal({
           {/* Sentiment Display */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Your Rating
+              {t('feedback.yourRating')}
             </label>
             <div className="flex items-center gap-2">
               {sentiment === 'positive' ? (
@@ -147,7 +158,7 @@ export function FeedbackModal({
                       <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
                     </svg>
                   </div>
-                  <span className="text-sm font-medium text-green-700">Helpful</span>
+                  <span className="text-sm font-medium text-green-700">{t('feedback.helpful')}</span>
                 </>
               ) : (
                 <>
@@ -156,7 +167,7 @@ export function FeedbackModal({
                       <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
                     </svg>
                   </div>
-                  <span className="text-sm font-medium text-red-700">Needs Improvement</span>
+                  <span className="text-sm font-medium text-red-700">{t('feedback.needsImprovement')}</span>
                 </>
               )}
             </div>
@@ -165,15 +176,16 @@ export function FeedbackModal({
           {/* Category Selection */}
           <div>
             <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">
-              What best describes your feedback? <span className="text-gray-400 font-normal">(optional)</span>
+              {t('feedback.whatDescribesFeedback')} <span className="text-red-600">{t('feedback.required')}</span>
             </label>
             <select
               id="category"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
+              required
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm text-gray-900"
             >
-              <option value="" className="text-gray-500">Select a category...</option>
+              <option value="" className="text-gray-500">{t('feedback.selectCategory')}</option>
               {categories.map((cat) => (
                 <option key={cat.value} value={cat.value} className="text-gray-900">
                   {cat.label}
@@ -185,15 +197,15 @@ export function FeedbackModal({
           {/* Comment */}
           <div>
             <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-2">
-              Additional details <span className="text-gray-400 font-normal">(optional)</span>
+              {t('feedback.additionalDetails')} <span className="text-gray-400 font-normal">{t('feedback.optional')}</span>
             </label>
             <textarea
               id="comment"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               rows={4}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-              placeholder="Please share any specific details that could help us improve..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm text-gray-900"
+              placeholder={t('feedback.placeholder')}
             />
           </div>
 
@@ -212,14 +224,14 @@ export function FeedbackModal({
               disabled={isSubmitting}
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
-              Cancel
+              {t('actions.cancel')}
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
+              {isSubmitting ? t('feedback.submitting') : t('feedback.submitFeedback')}
             </button>
           </div>
         </form>

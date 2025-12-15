@@ -53,6 +53,38 @@ export const translations = {
       clearFilters: 'Clear Filters',
     },
     
+    // Feedback
+    feedback: {
+      provideFeedback: 'Provide Feedback',
+      section: 'Section',
+      yourRating: 'Your Rating',
+      helpful: 'Helpful',
+      needsImprovement: 'Needs Improvement',
+      whatDescribesFeedback: 'What best describes your feedback?',
+      required: '*',
+      selectCategory: 'Select a category...',
+      additionalDetails: 'Additional details',
+      optional: '(optional)',
+      placeholder: 'Please share any specific details that could help us improve...',
+      submitFeedback: 'Submit Feedback',
+      submitting: 'Submitting...',
+      selectCategoryError: 'Please select a category',
+      // Positive categories
+      accurate: 'Accurate and trustworthy',
+      clearSummary: 'Clear summary',
+      rightDetail: 'Right level of detail',
+      actionable: 'Actionable next steps',
+      usefulOps: 'Useful for OPS decisions',
+      // Negative categories
+      inaccurate: 'Contains inaccuracies',
+      tooConfident: 'Too confident / not cautious enough',
+      missesPatterns: 'Misses important patterns',
+      tooLong: 'Too long or hard to scan',
+      tooVague: 'Too vague',
+      notRealistic: 'Recommendations not realistic',
+      avoidsHandling: 'Avoids addressing handling issues',
+    },
+    
     // Tabs
     tabs: {
       summary: 'Summary',
@@ -233,6 +265,38 @@ export const translations = {
       cancel: 'Annuler',
       confirm: 'Confirmer',
       clearFilters: 'Effacer les filtres',
+    },
+    
+    // Feedback
+    feedback: {
+      provideFeedback: 'Donner un retour',
+      section: 'Section',
+      yourRating: 'Votre évaluation',
+      helpful: 'Utile',
+      needsImprovement: 'À améliorer',
+      whatDescribesFeedback: 'Qu\'est-ce qui décrit le mieux votre retour ?',
+      required: '*',
+      selectCategory: 'Sélectionner une catégorie...',
+      additionalDetails: 'Détails supplémentaires',
+      optional: '(optionnel)',
+      placeholder: 'Veuillez partager tous les détails spécifiques qui pourraient nous aider à améliorer...',
+      submitFeedback: 'Envoyer le retour',
+      submitting: 'Envoi en cours...',
+      selectCategoryError: 'Veuillez sélectionner une catégorie',
+      // Positive categories
+      accurate: 'Précis et fiable',
+      clearSummary: 'Synthèse claire',
+      rightDetail: 'Bon niveau de détail',
+      actionable: 'Prochaines étapes actionnables',
+      usefulOps: 'Utile pour les décisions OPS',
+      // Negative categories
+      inaccurate: 'Contient des inexactitudes',
+      tooConfident: 'Trop confiant / pas assez prudent',
+      missesPatterns: 'Manque des patterns importants',
+      tooLong: 'Trop long ou difficile à parcourir',
+      tooVague: 'Trop vague',
+      notRealistic: 'Recommandations peu réalistes',
+      avoidsHandling: 'Évite de traiter les problèmes de gestion',
     },
     
     // Tabs

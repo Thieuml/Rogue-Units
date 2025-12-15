@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { FeedbackModal } from './FeedbackModal'
+import { Language } from '@/lib/translations'
 
 interface FeedbackButtonProps {
   diagnosticId: string
@@ -14,6 +15,7 @@ interface FeedbackButtonProps {
     comment?: string
   } | null
   onFeedbackSubmitted?: () => void
+  language?: Language
 }
 
 export function FeedbackButton({
@@ -21,7 +23,8 @@ export function FeedbackButton({
   section,
   sectionLabel,
   existingFeedback,
-  onFeedbackSubmitted
+  onFeedbackSubmitted,
+  language = 'en'
 }: FeedbackButtonProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedSentiment, setSelectedSentiment] = useState<'positive' | 'negative' | null>(null)
@@ -112,6 +115,7 @@ export function FeedbackButton({
           initialSentiment={selectedSentiment}
           existingFeedback={currentFeedback}
           onFeedbackSubmitted={handleFeedbackSubmitted}
+          language={language}
         />
       )}
     </>
