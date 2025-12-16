@@ -146,3 +146,4 @@ Created migration: `20251214223029_add_feedback_model`
 6. **Feedback Responses**: Allow admins to respond to feedback
 7. **Feedback on Patterns**: Consider adding feedback at pattern level within technical analysis
 
+

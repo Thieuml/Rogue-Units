@@ -17,6 +17,11 @@ interface SidebarProps {
   showCountryDropdown: boolean
   setShowCountryDropdown: (show: boolean) => void
   countryDropdownRef: React.RefObject<HTMLDivElement>
+  
+  // Optional props for main page custom navigation
+  onNewDiagnosticClick?: () => void
+  onRecentDiagnosticsClick?: () => void
+  activeView?: 'new' | 'recent' | 'diagnostic' | null
 }
 
 export function Sidebar({
@@ -28,20 +33,26 @@ export function Sidebar({
   showCountryDropdown,
   setShowCountryDropdown,
   countryDropdownRef,
+  onNewDiagnosticClick,
+  onRecentDiagnosticsClick,
+  activeView,
 }: SidebarProps) {
   const { data: session } = useSession()
   const pathname = usePathname()
   const { t } = useTranslation(language)
 
-  // Optimistic admin check - remember if user was admin to prevent flickering
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    // Initialize from localStorage immediately (SSR-safe)
+  // Optimistic admin check - start with cached value to reduce flicker
+  const [isAdmin, setIsAdmin] = useState<boolean>(false)
+  
+  // Load from localStorage immediately on mount (before first paint if possible)
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('isAdmin')
-      return stored === 'true'
+      if (stored === 'true') {
+        setIsAdmin(true)
+      }
     }
-    return false
-  })
+  }, [])
 
   // Update admin status when session changes
   useEffect(() => {
@@ -57,15 +68,13 @@ export function Sidebar({
   }, [session?.user?.email])
 
   return (
-    <aside className="w-64 bg-slate-800 text-white flex flex-col h-screen flex-shrink-0">
+    <aside className="w-64 bg-slate-800 text-white flex flex-col h-screen flex-shrink-0" suppressHydrationWarning>
       <div className="p-6 border-b border-slate-700">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1">
-            <WeMaintainLogo />
-          </div>
-          <div className="flex-shrink-0">
-            <LanguageToggle language={language} onLanguageChange={onLanguageChange} />
-          </div>
+        <div className="mb-4">
+          <WeMaintainLogo />
+        </div>
+        <div className="flex justify-center">
+          <LanguageToggle language={language} onLanguageChange={onLanguageChange} />
         </div>
       </div>
 
@@ -124,14 +133,23 @@ export function Sidebar({
             </div>
           </div>
 
-          <div className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+          <div className="text-sm font-semibold text-slate-400 uppercase tracking-wider mt-9">
             {t('nav.navigation')}
           </div>
           <a
-            href="/"
+            href={onNewDiagnosticClick ? '#' : '/'}
+            onClick={onNewDiagnosticClick ? (e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onNewDiagnosticClick()
+            } : undefined}
+            onMouseDown={onNewDiagnosticClick ? (e) => {
+              e.stopPropagation()
+            } : undefined}
             className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm text-white font-medium cursor-pointer transition-colors ${
-              pathname === '/' ? 'bg-slate-700' : 'hover:bg-slate-700'
+              (onNewDiagnosticClick && activeView === 'new') || (!onNewDiagnosticClick && pathname === '/') ? 'bg-slate-700' : 'hover:bg-slate-700'
             }`}
+            style={onNewDiagnosticClick ? { pointerEvents: 'auto' } : undefined}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
               <path fillRule="evenodd" clipRule="evenodd" d="M15.7692 1.85001L19.65 5.73077V20C19.65 21.1358 18.7693 22.0659 17.6535 22.1446L17.5 22.15H6.49998C5.36419 22.15 4.4341 21.2693 4.35537 20.1535L4.34998 20V4.00001C4.34998 2.86422 5.23068 1.93413 6.34643 1.8554L6.49998 1.85001H15.7692ZM14.549 3.15001H6.49998C6.06664 3.15001 5.70905 3.47427 5.6566 3.89338L5.64998 4.00001V20C5.64998 20.4333 5.97424 20.7909 6.39335 20.8434L6.49998 20.85H17.5C17.9333 20.85 18.2909 20.5257 18.3434 20.1066L18.35 20L18.349 7.15001H16.2C15.3367 7.15001 14.6282 6.48699 14.556 5.64237L14.55 5.50001L14.549 3.15001ZM15.849 3.76901L15.85 5.50001C15.85 5.66914 15.9699 5.81026 16.1294 5.8429L16.2 5.85001H17.93L15.849 3.76901Z" fill="currentColor"/>
@@ -140,10 +158,19 @@ export function Sidebar({
             <span>{t('nav.newDiagnostic')}</span>
           </a>
           <a
-            href="/?view=recent"
+            href={onRecentDiagnosticsClick ? '#' : '/?view=recent'}
+            onClick={onRecentDiagnosticsClick ? (e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onRecentDiagnosticsClick()
+            } : undefined}
+            onMouseDown={onRecentDiagnosticsClick ? (e) => {
+              e.stopPropagation()
+            } : undefined}
             className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm text-white font-medium cursor-pointer transition-colors ${
-              pathname === '/' && typeof window !== 'undefined' && window.location.search.includes('view=recent') ? 'bg-slate-700' : 'hover:bg-slate-700'
+              (onRecentDiagnosticsClick && activeView === 'recent') || (!onRecentDiagnosticsClick && pathname === '/' && typeof window !== 'undefined' && window.location.search.includes('view=recent')) ? 'bg-slate-700' : 'hover:bg-slate-700'
             }`}
+            style={onRecentDiagnosticsClick ? { pointerEvents: 'auto' } : undefined}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
               <path fillRule="evenodd" clipRule="evenodd" d="M15 2.20001C15.6351 2.20001 16.15 2.71488 16.15 3.35001L16.149 4.00001H18C18.8633 4.00001 19.5718 4.66303 19.6439 5.50764L19.65 5.65001V20.65C19.65 21.5133 18.987 22.2218 18.1424 22.294L18 22.3H6.00001C5.1367 22.3 4.42825 21.637 4.35606 20.7924L4.35001 20.65V5.65001C4.35001 4.7867 5.01302 4.07825 5.85764 4.00607L6.00001 4.00001H7.85001V3.35001C7.85001 2.75723 8.29852 2.2692 8.8747 2.20676L9.00001 2.20001H15ZM16.15 5.85001C16.15 6.48514 15.6351 7.00001 15 7.00001H9.00001C8.36488 7.00001 7.85001 6.48514 7.85001 5.85001V5.30001H6.00001C5.83087 5.30001 5.68975 5.41999 5.65712 5.57948L5.65001 5.65001V20.65C5.65001 20.8191 5.76998 20.9603 5.92947 20.9929L6.00001 21H18C18.1691 21 18.3103 20.88 18.3429 20.7205L18.35 20.65V5.65001C18.35 5.48088 18.23 5.33976 18.0705 5.30712L18 5.30001H16.149L16.15 5.85001ZM8.25001 16.3C8.66422 16.3 9.00001 16.6358 9.00001 17.05C9.00001 17.4642 8.66422 17.8 8.25001 17.8C7.83579 17.8 7.50001 17.4642 7.50001 17.05C7.50001 16.6358 7.83579 16.3 8.25001 16.3ZM16 16.4C16.359 16.4 16.65 16.691 16.65 17.05C16.65 17.3764 16.4095 17.6465 16.0961 17.693L16 17.7H11C10.641 17.7 10.35 17.409 10.35 17.05C10.35 16.7237 10.5905 16.4535 10.904 16.4071L11 16.4H16ZM8.25001 12.825C8.66422 12.825 9.00001 13.1608 9.00001 13.575C9.00001 13.9892 8.66422 14.325 8.25001 14.325C7.83579 14.325 7.50001 13.9892 7.50001 13.575C7.50001 13.1608 7.83579 12.825 8.25001 12.825ZM16 12.925C16.359 12.925 16.65 13.216 16.65 13.575C16.65 13.9014 16.4095 14.1715 16.0961 14.218L16 14.225H11C10.641 14.225 10.35 13.934 10.35 13.575C10.35 13.2487 10.5905 12.9785 10.904 12.9321L11 12.925H16ZM8.25001 9.35001C8.66422 9.35001 9.00001 9.6858 9.00001 10.1C9.00001 10.5142 8.66422 10.85 8.25001 10.85C7.83579 10.85 7.50001 10.5142 7.50001 10.1C7.50001 9.6858 7.83579 9.35001 8.25001 9.35001ZM16 9.45001C16.359 9.45001 16.65 9.74103 16.65 10.1C16.65 10.4264 16.4095 10.6965 16.0961 10.743L16 10.75H11C10.641 10.75 10.35 10.459 10.35 10.1C10.35 9.77366 10.5905 9.50349 10.904 9.45706L11 9.45001H16ZM14.85 3.50001H9.15001V5.70001H14.85V3.50001Z" fill="currentColor"/>
@@ -154,7 +181,7 @@ export function Sidebar({
 
         {/* Admin Tools Section - Only visible to admin users */}
         {isAdmin && (
-          <div className="pb-4 mt-4">
+          <div className="pb-4 mt-6" suppressHydrationWarning>
             <div className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">{t('nav.adminTools')}</div>
             <div className="space-y-2">
               <a
@@ -182,6 +209,17 @@ export function Sidebar({
                 </svg>
                 <span>{t('nav.usageAnalytics')}</span>
               </a>
+              <a
+                href="/feedback"
+                className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm text-white font-medium cursor-pointer transition-colors ${
+                  pathname === '/feedback' ? 'bg-slate-700' : 'hover:bg-slate-700'
+                }`}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+                  <path d="M21 11.5C21 16.7 16.97 21 12 21C10.66 21 9.39 20.71 8.25 20.19L3 21.5L4.82 16.83C3.67 15.5 3 13.79 3 12C3 7.03 7.03 3 12 3C16.97 3 21 7.03 21 11.5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span>Feedback</span>
+              </a>
             </div>
           </div>
         )}
@@ -193,3 +231,5 @@ export function Sidebar({
     </aside>
   )
 }
+
+
