@@ -62,10 +62,10 @@ export async function getLookerClient(): Promise<Looker40SDK> {
 }
 
 /**
- * Fetch buildings and devices from Looker (single Look)
- * Uses LOOKER_BUILDINGS_LOOK_ID env var (Look ID 161)
- * This single Look contains both buildings and devices data
- * Filters by country code (FR, UK, SG, HK)
+ * Fetch buildings and devices from Looker using inline query
+ * Previously used Look ID 161, but filters didn't work correctly
+ * Now uses run_inline_query for reliable filtering at database level
+ * Filters by country code (FR, UK->GB, SG, HK)
  */
 export async function fetchBuildingsAndDevices(countryCode: string): Promise<{
   buildings: Array<{
@@ -89,42 +89,52 @@ export async function fetchBuildingsAndDevices(countryCode: string): Promise<{
   console.log('[Looker] SDK client initialized')
   
   try {
-    const lookId = process.env.LOOKER_BUILDINGS_LOOK_ID
-    console.log('[Looker] Look ID from env:', lookId)
-    
-    if (!lookId) {
-      throw new Error('LOOKER_BUILDINGS_LOOK_ID must be set')
-    }
-    
     // Map country codes to Looker filter values
     const countryFilterMap: Record<string, string> = {
       'FR': 'FR',
-      'UK': 'GB', // UK might be stored as GB in Looker
+      'UK': 'GB', // UK is stored as GB in Looker
       'SG': 'SG',
       'HK': 'HK',
     }
     
     const lookerCountryCode = countryFilterMap[countryCode] || countryCode
-    console.log('[Looker] Using country code:', lookerCountryCode, 'for filter')
+    console.log('[Looker] Using country code:', lookerCountryCode, 'for inline query filter')
     
-    // Filter by account billing country code
-    // Looker SDK accepts filters as a map in the request
-    console.log('[Looker] Calling run_look with:', {
-      look_id: lookId,
-      filter: 'account.billing_country_code',
-      filter_value: lookerCountryCode,
+    // Use inline query instead of saved Look - filters work correctly at DB level
+    console.log('[Looker] Creating inline query with filters:', {
+      model: 'maintenance_completion',
+      view: 'device_status',
+      country_filter: lookerCountryCode,
     })
     
     let result
     try {
-      result = await (sdk.run_look as any)({
-        look_id: lookId,
+      result = await sdk.run_inline_query({
         result_format: 'json',
-        filters: {
-          'account.billing_country_code': lookerCountryCode,
-        },
+        cache: true,  // Enable caching for performance
+        cache_only: false,  // Run query if not cached
+        body: {
+          model: 'maintenance_completion',
+          view: 'device_status',
+          fields: [
+            'account.billing_country_code',
+            'building.building_id',
+            'building.name',
+            'building.full_address',
+            'device.location',
+            'device.device_id'
+          ],
+          filters: {
+            'contract_device.is_active': 'Yes',
+            'device.type': 'ELEVATOR,ESCALATOR',
+            'account.billing_country_code': lookerCountryCode,  // Filter at DB level
+          },
+          sorts: ['account.billing_country_code', 'building.name', 'device.location'],
+          limit: '50000',  // Increased from 5000 to handle all devices per country
+        }
       })
       
+      console.log('[Looker] Inline query executed')
       console.log('[Looker] Raw result type:', typeof result)
       console.log('[Looker] Raw result sample (first 500 chars):', JSON.stringify(result).substring(0, 500))
       
@@ -144,7 +154,7 @@ export async function fetchBuildingsAndDevices(countryCode: string): Promise<{
         }
       }
   } catch (error) {
-      console.error('[Looker] Error calling run_look:', error)
+      console.error('[Looker] Error executing inline query:', error)
       console.error('[Looker] Error type:', typeof error)
       console.error('[Looker] Error details:', {
         message: error instanceof Error ? error.message : String(error),
@@ -164,7 +174,7 @@ export async function fetchBuildingsAndDevices(countryCode: string): Promise<{
           throw new Error(`Looker authentication failed.\n\nPlease check:\n1. LOOKER_CLIENT_ID is correct\n2. LOOKER_CLIENT_SECRET is correct\n3. API credentials have proper permissions\n\nOriginal error: ${error.message}`)
         }
         if (errorMsg.includes('404') || errorMsg.includes('not found')) {
-          throw new Error(`Looker Look not found.\n\nPlease check:\n1. LOOKER_BUILDINGS_LOOK_ID=${lookId} exists\n2. You have access to this Look\n\nOriginal error: ${error.message}`)
+          throw new Error(`Looker query error.\n\nPlease check:\n1. Model 'maintenance_completion' exists and is accessible\n2. View 'device_status' exists in the model\n3. Fields are correctly named\n\nOriginal error: ${error.message}`)
         }
       }
       throw error
@@ -235,38 +245,28 @@ export async function fetchBuildingsAndDevices(countryCode: string): Promise<{
       )
       // Extract country - try multiple field name variations
       const rowCountry = (
+        row['account.billing_country_code'] ||
+        row['account_billing_country_code'] ||
         row['Country'] || 
         row['country'] || 
         row['Account Country'] ||
         row['account.country'] ||
         row['account_country'] ||
-        row['account.billing_country_code'] ||
-        row['account_billing_country_code'] ||
         ''
       )
       
-      // Normalize country code for comparison
-      // Map GB <-> UK for consistency
-      let normalizedRowCountry = rowCountry.toUpperCase().trim()
-      if (normalizedRowCountry === 'GB') {
-        normalizedRowCountry = 'UK'
+      // Normalize country code for consistency (GB -> UK for display)
+      let country = rowCountry.toUpperCase().trim()
+      if (country === 'GB') {
+        country = 'UK'
+      }
+      // Fallback to requested country if not in row
+      if (!country) {
+        country = countryCode
       }
       
-      // Normalize requested country (already mapped GB -> UK in countryFilterMap)
-      const normalizedRequestCountry = countryCode.toUpperCase().trim()
-      
-      // Filter by country - only include rows that match the requested country
-      // This is a safety measure in case Looker filter doesn't work correctly
-      if (normalizedRowCountry && normalizedRowCountry !== normalizedRequestCountry) {
-        // Skip this row if country doesn't match
-        if (index < 5) {
-          console.log(`[Looker] Skipping row ${index} - country mismatch: row has "${normalizedRowCountry}", requested "${normalizedRequestCountry}" (Looker filter: "${lookerCountryCode}")`)
-        }
-        return
-      }
-      
-      // Use the normalized country or fallback to requested country
-      const country = normalizedRowCountry || countryCode
+      // NO CLIENT-SIDE FILTERING - inline query now filters at database level
+      // All rows returned should match the requested country
       const deviceId = (
         row['device.device_id']?.toString() ||
         row['device_id']?.toString() ||
@@ -328,6 +328,17 @@ export async function fetchBuildingsAndDevices(countryCode: string): Promise<{
     }
     if (extractedData.devices.length === 0 && rows.length > 0) {
       console.warn('[Looker] WARNING: No devices extracted despite having rows. Check field name mapping.')
+    }
+    
+    // Diagnostic logging for Calico House (to verify consistent device retrieval)
+    const calicoDevices = extractedData.devices.filter(d => 
+      d.buildingName.toLowerCase().includes('calico')
+    )
+    if (calicoDevices.length > 0) {
+      console.log(`[Looker] ✓ Found ${calicoDevices.length} devices for Calico House:`)
+      calicoDevices.forEach(d => {
+        console.log(`  - ${d.name} (ID: ${d.id}, BuildingID: ${d.buildingId})`)
+      })
     }
     
     return extractedData
