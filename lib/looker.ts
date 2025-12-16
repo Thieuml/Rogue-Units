@@ -139,19 +139,10 @@ export async function fetchBuildingsAndDevices(countryCode: string): Promise<{
       console.log('[Looker] Raw result sample (first 500 chars):', JSON.stringify(result).substring(0, 500))
       
       // Check if result contains an error - Looker SDK sometimes returns error objects instead of throwing
-      if (result && typeof result === 'object') {
-        // Check for error property or ok: false
-        if ('error' in result) {
-          const errorMsg = result.error?.message || JSON.stringify(result.error) || 'Unknown Looker error'
-          const errorType = result.error?.type || 'sdk_error'
-          console.error('[Looker] API returned error in response:', { errorMsg, errorType, fullResult: result })
-          throw new Error(`Looker API error (${errorType}): ${errorMsg}`)
-        }
-        if (result.ok === false) {
-          const errorMsg = result.error?.message || 'Looker API returned ok: false'
-          console.error('[Looker] API returned ok: false:', result)
-          throw new Error(`Looker API error: ${errorMsg}`)
-        }
+      if (result && typeof result === 'object' && 'error' in result) {
+        const errorMsg = (result.error as any)?.message || JSON.stringify(result.error) || 'Unknown Looker error'
+        console.error('[Looker] API returned error in response:', { errorMsg, fullResult: result })
+        throw new Error(`Looker API error: ${errorMsg}`)
       }
   } catch (error) {
       console.error('[Looker] Error executing inline query:', error)
