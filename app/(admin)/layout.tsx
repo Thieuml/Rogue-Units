@@ -8,8 +8,8 @@ import { useSession } from 'next-auth/react'
 const COUNTRIES = [
   { code: 'FR', name: 'France' },
   { code: 'UK', name: 'United Kingdom' },
-  { code: 'ES', name: 'Spain' },
-  { code: 'IT', name: 'Italy' },
+  { code: 'SG', name: 'Singapore' },
+  { code: 'HK', name: 'Hong Kong' },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
