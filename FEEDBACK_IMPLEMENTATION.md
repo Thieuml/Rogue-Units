@@ -147,3 +147,4 @@ Created migration: `20251214223029_add_feedback_model`
 7. **Feedback on Patterns**: Consider adding feedback at pattern level within technical analysis
 
 
+

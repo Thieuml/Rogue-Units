@@ -5,6 +5,7 @@
 import PDFDocument from 'pdfkit'
 type PDFDocumentType = typeof PDFDocument.prototype
 import { DiagnosticAnalysis, DiagnosticData } from './llm-analysis'
+import { Language, translations } from './translations'
 import fs from 'fs'
 import path from 'path'
 
@@ -13,7 +14,8 @@ import path from 'path'
  */
 export async function generatePDFBuffer(
   data: DiagnosticData,
-  analysis: DiagnosticAnalysis
+  analysis: DiagnosticAnalysis,
+  language: Language = 'en'
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
@@ -26,7 +28,7 @@ export async function generatePDFBuffer(
     doc.on('end', () => resolve(Buffer.concat(chunks)))
     doc.on('error', reject)
     
-    generatePDFContent(doc, data, analysis)
+    generatePDFContent(doc, data, analysis, language)
     doc.end()
   })
 }
@@ -37,7 +39,8 @@ export async function generatePDFBuffer(
 export async function generatePDF(
   data: DiagnosticData,
   analysis: DiagnosticAnalysis,
-  outputPath: string
+  outputPath: string,
+  language: Language = 'en'
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     // Ensure output directory exists
@@ -53,7 +56,7 @@ export async function generatePDF(
     const stream = fs.createWriteStream(outputPath)
     doc.pipe(stream)
     
-    generatePDFContent(doc, data, analysis)
+    generatePDFContent(doc, data, analysis, language)
     doc.end()
     
     stream.on('finish', () => {
@@ -72,8 +75,10 @@ export async function generatePDF(
 function generatePDFContent(
   doc: PDFDocumentType,
   data: DiagnosticData,
-  analysis: any
+  analysis: any,
+  language: Language = 'en'
 ): void {
+  const t = translations[language]
   
   if (!analysis) {
     throw new Error('Analysis data is required for PDF generation')
@@ -276,7 +281,7 @@ function generatePDFContent(
       if (analysis.executiveSummary.summaryOfEvents) {
         ensureSpace(40)
         doc.fontSize(14).font('Helvetica-Bold').fillColor('#1e293b')
-        doc.text('Summary of Events', margin, currentY)
+        doc.text(t.analysis.summaryOfEvents, margin, currentY)
         currentY += 20
         
         addText(
@@ -292,7 +297,7 @@ function generatePDFContent(
       if (analysis.executiveSummary.currentSituation) {
         ensureSpace(40)
         doc.fontSize(14).font('Helvetica-Bold').fillColor('#1e293b')
-        doc.text('Current Situation and Next Steps', margin, currentY)
+        doc.text(t.analysis.currentSituation, margin, currentY)
         currentY += 20
         
         addText(

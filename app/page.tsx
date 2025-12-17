@@ -757,13 +757,13 @@ export default function Home() {
       
       if (typeof summary === 'object') {
         if (summary.overview) {
-          textToCopy += 'Overview\n\n' + summary.overview.replace(/at Unit /gi, '').replace(/at /gi, '') + '\n\n'
+          textToCopy += t('analysis.overview') + '\n\n' + summary.overview.replace(/at Unit /gi, '').replace(/at /gi, '') + '\n\n'
         }
         if (summary.summaryOfEvents) {
-          textToCopy += 'Summary of Events\n\n' + summary.summaryOfEvents.replace(/at Unit /gi, '').replace(/at /gi, '') + '\n\n'
+          textToCopy += t('analysis.summaryOfEvents') + '\n\n' + summary.summaryOfEvents.replace(/at Unit /gi, '').replace(/at /gi, '') + '\n\n'
         }
         if (summary.currentSituation) {
-          textToCopy += 'Current Situation and Next Steps\n\n' + summary.currentSituation.replace(/at Unit /gi, '').replace(/at /gi, '')
+          textToCopy += t('analysis.currentSituation') + '\n\n' + summary.currentSituation.replace(/at Unit /gi, '').replace(/at /gi, '')
         }
         // NOTE: serviceHandlingReview is intentionally excluded as it's internal only
       } else {
@@ -1981,7 +1981,7 @@ export default function Home() {
                         {diagnosticResult.analysis.executiveSummary.summaryOfEvents && (
                           <div className="rounded-lg border-t-2 border-[#73A1FF] shadow-sm hover:shadow-md transition-shadow" style={{ backgroundColor: 'rgba(115, 161, 255, 0.05)' }}>
                             <div className="p-5">
-                              <h4 className="text-lg font-semibold text-gray-900 mb-3">Summary of Events</h4>
+                              <h4 className="text-lg font-semibold text-gray-900 mb-3">{t('analysis.summaryOfEvents')}</h4>
                               <p className="text-gray-700 leading-relaxed text-sm">
                                 {diagnosticResult.analysis.executiveSummary.summaryOfEvents.replace(/at Unit /gi, '').replace(/at /gi, '')}
                               </p>
@@ -1993,7 +1993,7 @@ export default function Home() {
                         {diagnosticResult.analysis.executiveSummary.currentSituation && (
                           <div className="rounded-lg border-t-2 border-[#73A1FF] shadow-sm hover:shadow-md transition-shadow" style={{ backgroundColor: 'rgba(115, 161, 255, 0.05)' }}>
                             <div className="p-5">
-                              <h4 className="text-lg font-semibold text-gray-900 mb-3">Current Situation and Next Steps</h4>
+                              <h4 className="text-lg font-semibold text-gray-900 mb-3">{t('analysis.currentSituation')}</h4>
                               <p className="text-gray-700 leading-relaxed text-sm">
                                 {diagnosticResult.analysis.executiveSummary.currentSituation.replace(/at Unit /gi, '').replace(/at /gi, '')}
                               </p>
@@ -2006,9 +2006,9 @@ export default function Home() {
                           <div className="rounded-lg border-t-2 border-[#73A1FF] shadow-sm" style={{ backgroundColor: 'rgba(251, 191, 36, 0.02)' }}>
                             <div className="p-5">
                               <div className="flex items-center gap-3 mb-3">
-                                <h4 className="text-lg font-semibold text-gray-900">Service Handling Review</h4>
+                                <h4 className="text-lg font-semibold text-gray-900">{t('analysis.serviceHandlingReview')}</h4>
                                 <span className="px-2.5 py-0.5 bg-amber-100 text-amber-800 text-xs font-semibold rounded-full border border-amber-200">
-                                  INTERNAL USE
+                                  {t('analysis.internalUse')}
                                 </span>
                               </div>
                               <p className="text-gray-600 leading-relaxed text-sm italic">
@@ -2081,7 +2081,7 @@ export default function Home() {
                                           ? 'bg-yellow-100 text-yellow-800'
                                           : 'bg-green-100 text-green-800'
                                       }`}>
-                                        {pattern.quantifiedImpact.riskLevel.toUpperCase()}
+                                        {t(`analysis.${pattern.quantifiedImpact.riskLevel.toLowerCase()}`)}
                                       </span>
                                       <span className="text-gray-600">- {pattern.quantifiedImpact.riskRationale}</span>
                                     </div>

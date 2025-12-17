@@ -1,9 +1,15 @@
 'use client'
 
 import { signOut, useSession } from "next-auth/react"
+import { Language, useTranslation } from '@/lib/translations'
 
-export function UserMenu() {
+interface UserMenuProps {
+  language: Language
+}
+
+export function UserMenu({ language }: UserMenuProps) {
   const { data: session, status } = useSession()
+  const { t } = useTranslation(language)
   
   // TEMPORARY: Show bypass indicator if SSO is bypassed
   // Remove this once Google Workspace SSO is configured
@@ -83,7 +89,7 @@ export function UserMenu() {
         onClick={() => signOut({ callbackUrl: '/auth/signin' })}
         className="w-full text-sm text-white hover:text-red-400 px-3 py-2 rounded hover:bg-slate-700 transition-colors text-center"
       >
-        Sign Out
+        {t('actions.signOut')}
       </button>
     </div>
   )
