@@ -191,6 +191,8 @@ export const translations = {
       foundDiagnostics: 'diagnostics found for',
       noDiagnosticsYet: 'No diagnostics found.',
       tryAdjustingFilters: 'Try adjusting your filters or launch a new diagnostic.',
+      by: 'by',
+      datePlaceholder: 'dd/mm/yyyy',
     },
     
     // Page titles
@@ -409,6 +411,8 @@ export const translations = {
       foundDiagnostics: 'diagnostics trouvés',
       noDiagnosticsYet: 'Aucun diagnostic trouvé.',
       tryAdjustingFilters: 'Essayez d\'ajuster vos filtres ou lancez un nouveau diagnostic.',
+      by: 'par',
+      datePlaceholder: 'jj/mm/aaaa',
     },
     
     // Page titles
@@ -627,6 +631,8 @@ export const translations = {
       foundDiagnostics: '找到的诊断',
       noDiagnosticsYet: '未找到诊断。',
       tryAdjustingFilters: '请尝试调整您的筛选条件或启动新诊断。',
+      by: '由',
+      datePlaceholder: '日/月/年',
     },
     
     // Page titles

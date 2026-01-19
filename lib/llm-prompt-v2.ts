@@ -62,7 +62,7 @@ function deduplicateLinkedPartsV2(parts: any[]) {
  * Get the V2 system prompt
  * Restructured into clear sections while preserving all V1 heuristics
  */
-function getSystemPromptV2(language?: 'en' | 'fr'): string {
+function getSystemPromptV2(language?: 'en' | 'fr' | 'zh'): string {
   let basePrompt = `${ROLE_AND_GOAL}
 
 ${DATA_STRUCTURES}
@@ -94,6 +94,27 @@ ALL fields in the JSON response must be in French, including:
 
 `
     basePrompt = frenchInstruction + '\n' + basePrompt
+  }
+
+  // Add Simplified Chinese language instruction if needed
+  if (language === 'zh') {
+    const chineseInstruction = `重要提示: 请完全使用简体中文回复。使用适合电梯/升降机维护行业的专业技术中文术语。
+
+关键术语使用:
+- "故障" (breakdown), "技术员" (engineer/technician), "服务" (visit/call),
+- "设备/电梯" (unit/lift), "部件" (component/part), "失效" (failure),
+- "维护" (maintenance), "维修" (repair), "更换" (replacement),
+- "诊断" (diagnostic), "分析" (analysis), "建议" (recommendation).
+
+JSON响应中的所有字段都必须使用中文，包括:
+- 所有描述、叙述和摘要
+- 部件名称（例如："门"表示door，"电机"表示motor，"控制器"表示controller）
+- 模式描述和根本原因
+- 建议和行动项目
+- 时间线事件描述
+
+`
+    basePrompt = chineseInstruction + '\n' + basePrompt
   }
 
   return basePrompt

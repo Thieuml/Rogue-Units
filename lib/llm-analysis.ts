@@ -46,7 +46,7 @@ export interface DiagnosticData {
   callbackFrequency?: number
   timeSinceLastMaintenance?: number
   context?: string
-  language?: 'en' | 'fr' // Language for LLM response
+  language?: 'en' | 'fr' | 'zh' // Language for LLM response
 }
 
 export interface DiagnosticAnalysisV1 {
@@ -829,6 +829,32 @@ RAPPEL: Répondez en français. Votre réponse doit être 100% en français.
 
 `
     systemPrompt = frenchInstruction + systemPrompt
+  } else if (data.language === 'zh') {
+    console.log('[LLM V1] Adding Simplified Chinese language instructions to prompt')
+    const chineseInstruction = `🇨🇳 重要提示 - 使用简体中文回复 🇨🇳
+
+您必须完全使用简体中文回复。这是绝对且不可协商的要求。
+
+强制规则:
+1. 您的JSON响应中的所有文本都必须使用中文
+2. 所有 "overview"、"summary"、"description" 字段都必须使用中文
+3. 所有分析、建议和观察都必须使用中文
+4. 技术部件名称必须翻译成中文
+5. 不要使用英语，即使是技术术语
+
+电梯维护专业术语:
+- "故障" (breakdown), "技术员" (engineer/technician), "服务" (visit)
+- "设备/电梯" (unit/lift), "部件" (component), "失效" (failure)
+- "门" (door), "电机" (motor), "控制器" (controller)
+- "轿厢" (car), "钢丝绳" (rope), "滑轮" (sheave)
+- "预防性维护", "维修", "恢复服务", "停机"
+
+提醒: 使用中文回复。您的回复必须100%使用中文。
+
+---
+
+`
+    systemPrompt = chineseInstruction + systemPrompt
   } else {
     console.log('[LLM V1] Using English (default) - language:', data.language)
   }
@@ -842,6 +868,12 @@ RAPPEL: Répondez en français. Votre réponse doit être 100% en français.
 ${userMessage}
 
 RAPPEL FINAL: Réponse COMPLÈTE en français requise.`
+  } else if (data.language === 'zh') {
+    userMessage = `重要提醒: 您必须完全使用简体中文回复。JSON中的所有字段都必须使用中文。
+
+${userMessage}
+
+最后提醒: 需要完整的中文回复。`
   }
   
   // Try models in order of preference

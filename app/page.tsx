@@ -792,29 +792,29 @@ export default function Home() {
         setShowCountryDropdown={setShowCountryDropdown}
         countryDropdownRef={countryDropdownRef}
         onNewDiagnosticClick={() => {
-          // Close any open dropdowns
-          setShowBuildingDropdown(false)
-          setShowDeviceDropdown(false)
-          setShowCountryDropdown(false)
-          setShowRecentResults(false)
-          setDiagnosticResult(null)
+                // Close any open dropdowns
+                setShowBuildingDropdown(false)
+                setShowDeviceDropdown(false)
+                setShowCountryDropdown(false)
+                setShowRecentResults(false)
+                setDiagnosticResult(null)
           // Clear URL - remove diagnostic ID
           window.history.pushState({}, '', '/')
-          // Scroll to top
-          window.scrollTo({ top: 0, behavior: 'smooth' })
-        }}
+                // Scroll to top
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
         onRecentDiagnosticsClick={() => {
-          // Close any open dropdowns
-          setShowBuildingDropdown(false)
-          setShowDeviceDropdown(false)
-          setShowCountryDropdown(false)
-          setShowRecentResults(true)
-          setDiagnosticResult(null)
+                // Close any open dropdowns
+                setShowBuildingDropdown(false)
+                setShowDeviceDropdown(false)
+                setShowCountryDropdown(false)
+                setShowRecentResults(true)
+                setDiagnosticResult(null)
           // Update URL to show recent diagnostics view
           window.history.pushState({}, '', '/?view=recent')
-          // Scroll to top to show recent results
-          window.scrollTo({ top: 0, behavior: 'smooth' })
-        }}
+                // Scroll to top to show recent results
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
         activeView={
           showRecentResults ? 'recent' : 
           diagnosticResult ? 'diagnostic' : 
@@ -1009,7 +1009,7 @@ export default function Home() {
                                 const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
                                 const timeStr = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
                                 const userName = result.userName || 'Unknown'
-                                return `${dateStr}, ${timeStr}, by ${userName}`
+                                return `${dateStr}, ${timeStr}, ${t('recent.by')} ${userName}`
                               })()}
                             </p>
                           </div>
@@ -1930,28 +1930,28 @@ export default function Home() {
                     {/* Section Header */}
                     <div className="mb-6 rounded-lg p-5 flex items-center justify-between" style={{ backgroundColor: 'rgba(115, 161, 255, 0.15)' }}>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-xl font-semibold text-gray-900">{t('analysis.operationalSummary')}</h3>
-                        <button
-                          onClick={handleCopyOperationalSummary}
-                          className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:text-gray-900 hover:bg-white/50 rounded transition-colors"
-                          title={t('actions.copy')}
-                        >
-                          {copiedSection === 'operational' ? (
-                            <>
-                              <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                              <span className="text-green-600">{t('actions.copied')}</span>
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                              </svg>
-                              <span>{t('actions.copy')}</span>
-                            </>
-                          )}
-                        </button>
+                      <h3 className="text-xl font-semibold text-gray-900">{t('analysis.operationalSummary')}</h3>
+                      <button
+                        onClick={handleCopyOperationalSummary}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:text-gray-900 hover:bg-white/50 rounded transition-colors"
+                        title={t('actions.copy')}
+                      >
+                        {copiedSection === 'operational' ? (
+                          <>
+                            <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span className="text-green-600">{t('actions.copied')}</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            <span>{t('actions.copy')}</span>
+                          </>
+                        )}
+                      </button>
                       </div>
                       {diagnosticResult.id && (
                         <FeedbackButton
