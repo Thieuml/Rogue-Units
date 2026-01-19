@@ -30,9 +30,22 @@ export default function LanguageToggle({ language, onLanguageChange }: LanguageT
       >
         FR
       </button>
+      <button
+        onClick={() => onLanguageChange('zh')}
+        className={`text-[10px] font-medium transition-colors ${
+          language === 'zh'
+            ? 'text-white bg-blue-600 px-1.5 py-0.5 rounded'
+            : 'text-slate-400 hover:text-white'
+        }`}
+      >
+        中文
+      </button>
     </div>
   )
 }
+
+
+
 
 
 

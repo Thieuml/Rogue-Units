@@ -1327,7 +1327,9 @@ export default function Home() {
                   {diagnosticResult.unitName} - {diagnosticResult.buildingName}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {t('results.generated')}: {new Date(diagnosticResult.generatedAt).toLocaleString(language === 'fr' ? 'fr-FR' : 'en-GB', {
+                  {t('results.generated')}: {new Date(diagnosticResult.generatedAt).toLocaleString(
+                    language === 'fr' ? 'fr-FR' : language === 'zh' ? 'zh-CN' : 'en-GB', 
+                    {
                     year: 'numeric',
                     month: '2-digit',
                     day: '2-digit',

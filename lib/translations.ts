@@ -1,9 +1,9 @@
 /**
- * Translation dictionary for FR/EN language support
+ * Translation dictionary for EN/FR/ZH language support
  * Professional lift maintenance industry terminology
  */
 
-export type Language = 'en' | 'fr'
+export type Language = 'en' | 'fr' | 'zh'
 
 export const translations = {
   en: {
@@ -16,6 +16,7 @@ export const translations = {
       navigation: 'Navigation',
       adminTools: 'Admin Tools',
       country: 'Country',
+      feedback: 'Feedback',
     },
     
     // Countries
@@ -233,6 +234,7 @@ export const translations = {
       navigation: 'Navigation',
       adminTools: 'Outils admin',
       country: 'Pays',
+      feedback: 'Retours',
     },
     
     // Countries
@@ -437,6 +439,224 @@ export const translations = {
       ended: 'terminée',
       repairRequest: 'Demande de réparation',
       partReplaced: 'Pièce remplacée',
+    },
+  },
+  
+  zh: {
+    // Navigation
+    nav: {
+      newDiagnostic: '启动新诊断',
+      recentDiagnostics: '最近的诊断',
+      usageAnalytics: '使用统计',
+      promptTesting: '提示测试',
+      navigation: '导航',
+      adminTools: '管理工具',
+      country: '国家',
+      feedback: '反馈',
+    },
+    
+    // Countries
+    countries: {
+      france: '法国',
+      unitedKingdom: '英国',
+      singapore: '新加坡',
+      hongKong: '香港',
+    },
+    
+    // Form labels
+    form: {
+      building: '建筑物',
+      device: '设备',
+      whatLookingFor: '您想查询什么？',
+      optional: '可选',
+      defaultPeriod: '默认诊断期限：最近3个月',
+      typeBuildingName: '输入建筑物名称或地址...',
+      typeDeviceName: '输入设备名称...',
+      selected: '已选择',
+      buildingsIn: '个建筑物位于',
+      selectBuildingFirst: '请先选择建筑物',
+      examplePlaceholder: '例如：更改诊断期限、深入了解重复出现的轿厢门问题、近期故障概述...',
+    },
+    
+    // Actions
+    actions: {
+      analyze: '分析',
+      copy: '复制',
+      copied: '已复制！',
+      delete: '删除',
+      signOut: '退出登录',
+      cancel: '取消',
+      confirm: '确认',
+      clearFilters: '清除筛选条件',
+    },
+    
+    // Feedback
+    feedback: {
+      provideFeedback: '提供反馈',
+      section: '部分',
+      yourRating: '您的评价',
+      helpful: '有用',
+      needsImprovement: '需要改进',
+      whatDescribesFeedback: '以下哪项最能描述您的反馈？',
+      required: '*',
+      selectCategory: '选择类别...',
+      additionalDetails: '其他详细信息',
+      optional: '（可选）',
+      placeholder: '请分享任何具体细节以帮助我们改进...',
+      submitFeedback: '提交反馈',
+      submitting: '提交中...',
+      selectCategoryError: '请选择一个类别',
+      // Positive categories
+      accurate: '准确可靠',
+      clearSummary: '摘要清晰',
+      rightDetail: '详细程度适当',
+      actionable: '后续步骤可行',
+      usefulOps: '对运营决策有用',
+      // Negative categories
+      inaccurate: '包含不准确之处',
+      tooConfident: '过于自信/不够谨慎',
+      missesPatterns: '遗漏重要模式',
+      tooLong: '过长或难以浏览',
+      tooVague: '过于模糊',
+      notRealistic: '建议不切实际',
+      avoidsHandling: '回避处理问题',
+    },
+    
+    // Tabs
+    tabs: {
+      summary: '摘要',
+      timeline: '时间线',
+      visitReports: '服务报告',
+      analysis: '分析',
+      componentsHistory: '部件历史',
+    },
+    
+    // Results page
+    results: {
+      title: '诊断结果',
+      generated: '生成时间',
+      visits: '次服务',
+      visit: '次服务',
+      breakdowns: '次故障',
+      breakdown: '次故障',
+      repairRequests: '个维修请求',
+      repairRequest: '个维修请求',
+      partReplaced: '个更换部件',
+      partsReplaced: '个更换部件',
+      lastDaysTimeline: '最近{days}天时间线',
+      relatedBreakdowns: '相关故障',
+      relatedFaults: '相关缺陷',
+      partsReplacedOn: '此部件上更换的部件',
+      noRelatedData: '此部件没有相关数据。',
+      noComponentHistory: '此期间没有可用的部件历史记录。',
+      duration: '持续时间',
+    },
+    
+    // Analysis sections
+    analysis: {
+      executiveSummary: '执行摘要',
+      operationalSummary: '运营摘要',
+      technicalSummary: '技术摘要',
+      overview: '概述',
+      summaryOfEvents: '事件摘要',
+      currentSituation: '当前情况和后续步骤',
+      serviceHandlingReview: '服务处理审查',
+      internalUse: '内部使用',
+      repeatedPatterns: '重复模式',
+      likelyCauses: '可能原因',
+      quantifiedImpact: '量化影响',
+      rootCauseAnalysis: '根本原因分析',
+      actionableRecommendations: '可行建议',
+      probabilityOfResolution: '解决概率',
+      breakdowns: '故障',
+      timeSpan: '时间跨度',
+      downtime: '停机时间',
+      total: '总计',
+      perEvent: '每次事件',
+      riskLevel: '风险等级',
+      high: '高',
+      medium: '中',
+      low: '低',
+      successRate: '成功率',
+      ifIssuePersists: '如果问题持续',
+      timeframe: '时间范围',
+      expected: '预期',
+    },
+    
+    // Table headers
+    table: {
+      date: '日期',
+      engineer: '技术员',
+      type: '类型',
+      status: '状态',
+      comment: '评论',
+      duration: '持续时间',
+      origin: '来源',
+      component: '部件',
+      visited: '已访问',
+      userName: '用户名',
+      userId: '用户ID',
+      totalDiagnostics: '诊断总数',
+      countries: '国家',
+      latestDiagnostic: '最新诊断',
+      unit: '设备',
+      building: '建筑物',
+      generatedAt: '生成时间',
+    },
+    
+    // Status labels
+    status: {
+      loading: '加载中...',
+      analyzing: '正在分析诊断数据...',
+      inspecting: '正在检查设备，请稍候...',
+      mayTakeTime: '这可能需要最多20秒',
+      noResults: '未找到结果',
+      noData: '无可用数据',
+      error: '错误',
+      retry: '重试',
+    },
+    
+    // Recent Diagnostics
+    recent: {
+      title: '最近的诊断',
+      myDiagnostics: '我的诊断',
+      startDate: '开始日期',
+      endDate: '结束日期',
+      unitName: '设备',
+      searchByUnitName: '按设备名称搜索...',
+      foundDiagnostics: '找到的诊断',
+      noDiagnosticsYet: '未找到诊断。',
+      tryAdjustingFilters: '请尝试调整您的筛选条件或启动新诊断。',
+    },
+    
+    // Page titles
+    page: {
+      liftDiagnosticSummary: '电梯诊断摘要',
+    },
+    
+    // Usage Analytics
+    usage: {
+      title: '使用统计',
+      totalUsers: '用户总数',
+      totalDiagnostics: '诊断总数',
+      averagePerUser: '每位用户平均',
+      searchUsers: '按用户名或ID搜索...',
+      noDiagnosticsYet: '尚未生成任何诊断。',
+      checkBackLater: '在创建一些诊断后再回来查看。',
+      noUsersFound: '未找到与您的搜索匹配的用户。',
+      tryDifferentSearch: '请尝试其他搜索词。',
+    },
+    
+    // Timeline
+    timeline: {
+      daysTimeline: '天时间线',
+      last: '最近',
+      breakdown: '故障',
+      ongoing: '进行中',
+      visit: '服务',
+      ended: '已结束',
+      repairRequest: '维修请求',
+      partReplaced: '更换部件',
     },
   },
 } as const

@@ -224,7 +224,7 @@ export function Sidebar({
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
                 <path d="M21 11.5C21 16.7 16.97 21 12 21C10.66 21 9.39 20.71 8.25 20.19L3 21.5L4.82 16.83C3.67 15.5 3 13.79 3 12C3 7.03 7.03 3 12 3C16.97 3 21 7.03 21 11.5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-              <span>Feedback</span>
+              <span>{t('nav.feedback')}</span>
             </a>
           </div>
         </div>
