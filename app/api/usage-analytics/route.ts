@@ -80,7 +80,6 @@ export async function GET() {
       }
     })
 
-    // Convert to array and sort by total diagnostics (descending)
     const userStats = Array.from(userStatsMap.values())
       .map(stat => ({
         userId: stat.userId,
@@ -89,7 +88,7 @@ export async function GET() {
         latestDiagnosticDate: stat.latestDiagnosticDate.toISOString(),
         countries: Array.from(stat.countries).sort()
       }))
-      .sort((a, b) => b.totalDiagnostics - a.totalDiagnostics)
+      .sort((a, b) => b.latestDiagnosticDate.localeCompare(a.latestDiagnosticDate))
 
     // Calculate overall statistics
     const overallStats = {

@@ -22,12 +22,17 @@ interface UsageAnalyticsData {
   overallStats: OverallStats
 }
 
+type SortColumn = 'userName' | 'totalDiagnostics' | 'countries' | 'latestDiagnosticDate'
+type SortDirection = 'asc' | 'desc'
+
 export default function UsageAnalyticsPage() {
   const { data: session, status } = useSession()
   const [data, setData] = useState<UsageAnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [sortColumn, setSortColumn] = useState<SortColumn>('latestDiagnosticDate')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -75,11 +80,64 @@ export default function UsageAnalyticsPage() {
     }
   }
 
-  // Filter users based on search
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortColumn(column)
+      setSortDirection(column === 'userName' || column === 'countries' ? 'asc' : 'desc')
+    }
+  }
+
+  const SortIcon = ({ column }: { column: SortColumn }) => {
+    if (sortColumn !== column) {
+      return (
+        <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+        </svg>
+      )
+    }
+
+    return sortDirection === 'asc' ? (
+      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+      </svg>
+    ) : (
+      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
+    )
+  }
+
   const filteredUsers = data?.userStats.filter(stat =>
     stat.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     stat.userId.toLowerCase().includes(searchTerm.toLowerCase())
   ) || []
+
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    const direction = sortDirection === 'asc' ? 1 : -1
+
+    switch (sortColumn) {
+      case 'userName': {
+        const comparison = a.userName.localeCompare(b.userName, undefined, { sensitivity: 'base' })
+        return comparison * direction
+      }
+      case 'totalDiagnostics':
+        return (a.totalDiagnostics - b.totalDiagnostics) * direction
+      case 'countries': {
+        const countDiff = a.countries.length - b.countries.length
+        if (countDiff !== 0) return countDiff * direction
+        return a.countries.join(', ').localeCompare(b.countries.join(', '), undefined, { sensitivity: 'base' }) * direction
+      }
+      case 'latestDiagnosticDate': {
+        const aTime = a.latestDiagnosticDate ? new Date(a.latestDiagnosticDate).getTime() : 0
+        const bTime = b.latestDiagnosticDate ? new Date(b.latestDiagnosticDate).getTime() : 0
+        return (aTime - bTime) * direction
+      }
+      default:
+        return 0
+    }
+  })
 
   return (
     <main className="flex-1 overflow-auto">
@@ -187,16 +245,44 @@ export default function UsageAnalyticsPage() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        User
+                        <button
+                          type="button"
+                          onClick={() => handleSort('userName')}
+                          className="inline-flex items-center gap-1 hover:text-gray-700 transition-colors"
+                        >
+                          User
+                          <SortIcon column="userName" />
+                        </button>
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Total Diagnostics
+                        <button
+                          type="button"
+                          onClick={() => handleSort('totalDiagnostics')}
+                          className="inline-flex items-center gap-1 hover:text-gray-700 transition-colors"
+                        >
+                          Total Diagnostics
+                          <SortIcon column="totalDiagnostics" />
+                        </button>
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Countries
+                        <button
+                          type="button"
+                          onClick={() => handleSort('countries')}
+                          className="inline-flex items-center gap-1 hover:text-gray-700 transition-colors"
+                        >
+                          Countries
+                          <SortIcon column="countries" />
+                        </button>
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Latest Activity
+                        <button
+                          type="button"
+                          onClick={() => handleSort('latestDiagnosticDate')}
+                          className="inline-flex items-center gap-1 hover:text-gray-700 transition-colors"
+                        >
+                          Latest Activity
+                          <SortIcon column="latestDiagnosticDate" />
+                        </button>
                       </th>
                     </tr>
                   </thead>
@@ -208,7 +294,7 @@ export default function UsageAnalyticsPage() {
                         </td>
                       </tr>
                     ) : (
-                      filteredUsers.map((stat) => (
+                      sortedUsers.map((stat) => (
                         <tr key={stat.userId} className="hover:bg-gray-50 transition-colors">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div>
